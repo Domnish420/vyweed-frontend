@@ -31,10 +31,14 @@ yarn-error.*
 *.pem
 
 # local env files
+.env
 .env*.local
 
 # typescript
 *.tsbuildinfo
+
+# Play Store service account key (contains private credentials)
+google-play-service-account.json
 
 # generated native folders
 /ios
