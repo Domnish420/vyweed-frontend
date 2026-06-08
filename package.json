@@ -1,0 +1,29 @@
+{
+  "name": "vyweed",
+  "version": "1.0.0",
+  "main": "index.js",
+  "dependencies": {
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "expo": "~56.0.9",
+    "expo-file-system": "~56.0.7",
+    "expo-image-picker": "~56.0.16",
+    "expo-notifications": "~56.0.16",
+    "expo-status-bar": "~56.0.4",
+    "react": "19.2.3",
+    "react-native": "0.85.3",
+    "react-native-reanimated": "4.3.1",
+    "react-native-safe-area-context": "^5.8.0",
+    "react-native-screens": "^4.25.2",
+    "react-native-svg": "^15.15.5"
+  },
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web"
+  },
+  "private": true,
+  "allowScripts": {
+    "@shopify/react-native-skia@2.6.4": true
+  }
+}
