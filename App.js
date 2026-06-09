@@ -27,6 +27,7 @@ import SettingsScreen       from "./SettingsScreen";
 import Glossary             from "./Glossary";
 import VirtualGrow          from "./VirtualGrow";
 import OutdoorGuide         from "./OutdoorGuide";
+import Growver              from "./Growver";
 import { AppModeProvider, useAppMode } from "./AppMode";
 import {
   addNotificationResponseListener,
@@ -61,6 +62,7 @@ const TABS = [
   { id: "outdoor",  label: "OUTDOOR",  icon: "🌤" },
   { id: "vpd",      label: "VPD",      icon: "🌡" },
   { id: "glossary", label: "GLOSSARY", icon: "📖" },
+  { id: "growver",  label: "GROWVER",  icon: "🤖" },
   { id: "settings", label: "SETTINGS", icon: "⚙" },
 ];
 
@@ -202,6 +204,11 @@ function AppInner() {
         {/* GLOSSARY */}
         <View style={{ flex: 1, display: activeTab === "glossary" ? "flex" : "none" }}>
           <Glossary />
+        </View>
+
+        {/* GROWVER */}
+        <View style={{ flex: 1, display: activeTab === "growver" ? "flex" : "none" }}>
+          <Growver />
         </View>
 
         {/* SETTINGS */}
