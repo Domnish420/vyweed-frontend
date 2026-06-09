@@ -3,6 +3,7 @@ import Constants from 'expo-constants';
 const extra = Constants.expoConfig?.extra ?? {};
 
 export const API_BASE_URL = extra.apiBaseUrl ?? 'http://localhost:8000';
+export const API_V1       = `${API_BASE_URL}/api/v1`;
 
 export const ENDPOINTS = {
   strains:       `${API_BASE_URL}/strains`,

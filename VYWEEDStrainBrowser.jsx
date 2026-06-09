@@ -32,7 +32,7 @@ import { useAppMode } from "./AppMode";
 const { width: SW, height: SH } = Dimensions.get("window");
 
 // ── Config ────────────────────────────────────────────────────────────────────
-const API_BASE = "http://localhost:8000/api/v1";
+import { API_V1 as API_BASE } from "./apiConfig";
 
 // ── Palette — same as grow tracker for cohesion ───────────────────────────────
 const C = {

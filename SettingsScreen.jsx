@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { clearCache, checkConnection } from "./cache";
 import { useAppMode } from "./AppMode";
+import { API_V1 } from "./apiConfig";
 
 // Try to import AsyncStorage — gracefully fail if not installed
 let AsyncStorage = null;
@@ -35,7 +36,7 @@ const C = {
 const MONO = Platform.select({ ios: "Courier New", android: "monospace" });
 
 const DEFAULTS = {
-  api_url:   "http://localhost:8000/api/v1",
+  api_url:   API_V1,
   units:     "metric",
   medium:    "soil",
   dark_mode: true,          // always true for now, just showing the toggle

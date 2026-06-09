@@ -12,7 +12,7 @@ import {
 } from "react-native";
 import { cachedFetch } from "./cache";
 
-const API_BASE = "http://localhost:8000/api/v1";
+import { API_V1 as API_BASE } from "./apiConfig";
 const MONO = Platform.select({ ios: "Courier New", android: "monospace" });
 
 const C = {

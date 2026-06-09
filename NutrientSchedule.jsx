@@ -17,7 +17,7 @@ import {
   ActivityIndicator, Modal, Platform, Alert,
 } from "react-native";
 
-const API_BASE = "http://localhost:8000/api/v1";
+import { API_V1 as API_BASE } from "./apiConfig";
 
 const C = {
   bg:         "#070a07",
