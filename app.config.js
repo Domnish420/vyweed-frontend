@@ -59,7 +59,7 @@ export default {
       firebaseMessagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
       firebaseAppId:             process.env.FIREBASE_APP_ID,
       eas: {
-        projectId: process.env.EAS_PROJECT_ID ?? '',
+        projectId: process.env.EAS_PROJECT_ID ?? '7f57a434-b6f5-42b2-be1b-19cf37ba1117',
       },
     },
   },
