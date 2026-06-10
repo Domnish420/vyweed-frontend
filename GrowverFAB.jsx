@@ -1,0 +1,367 @@
+// GrowverFAB.jsx — floating Growver button + slide-up chat panel
+// Appears on Grow Tracker, Strain Browser, VPD, Virtual Grow, Outdoor Guide
+
+import React, { useState, useRef, useEffect, useCallback } from "react";
+import {
+  View, Text, TextInput, TouchableOpacity, FlatList,
+  Modal, Animated, KeyboardAvoidingView, Platform,
+  Dimensions, StyleSheet,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { API_BASE_URL } from "./apiConfig";
+
+const { height: SH } = Dimensions.get("window");
+const PANEL_H = SH * 0.62;
+
+const C = {
+  bg:        "#070a07",
+  surface:   "#0d120d",
+  card:      "#111811",
+  border:    "#1a2a1a",
+  green:     "#39ff45",
+  greenFaint:"#0d3d12",
+  greenDim:  "#1a7a20",
+  amber:     "#ffb830",
+  grey:      "#4a5a4a",
+  greyLight: "#8a9a8a",
+  white:     "#e8f0e8",
+  overlay:   "rgba(0,0,0,0.7)",
+};
+const MONO = Platform.select({ ios: "Courier New", android: "monospace" });
+
+// Screen-specific suggestion chips
+const SCREEN_CHIPS = {
+  grows:   ["Why are my leaves yellowing?", "What should I do today?", "How long until harvest?"],
+  browse:  ["Is this strain for beginners?", "Best strain for yield?", "Indica vs sativa effects?"],
+  vpd:     ["Explain VPD to me", "Optimal VPD for flowering?", "How do I lower my VPD?"],
+  grow:    ["How do I earn trophies?", "Explain grow stages", "What triggers flowering?"],
+  outdoor: ["When do I plant outside?", "Best outdoor strains?", "How do I deal with pests?"],
+};
+
+const MAX_HISTORY = 10;
+let _mid = 0;
+const mid = () => String(++_mid);
+
+// ── Typing dots ───────────────────────────────────────────────────────────────
+function TypingDots() {
+  const d1 = useRef(new Animated.Value(0.2)).current;
+  const d2 = useRef(new Animated.Value(0.2)).current;
+  const d3 = useRef(new Animated.Value(0.2)).current;
+
+  useEffect(() => {
+    const dot = (d, delay) => Animated.loop(Animated.sequence([
+      Animated.delay(delay),
+      Animated.timing(d, { toValue: 1,   duration: 280, useNativeDriver: true }),
+      Animated.timing(d, { toValue: 0.2, duration: 280, useNativeDriver: true }),
+      Animated.delay(350),
+    ]));
+    const a = [dot(d1, 0), dot(d2, 180), dot(d3, 360)];
+    a.forEach(x => x.start());
+    return () => a.forEach(x => x.stop());
+  }, []);
+
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 6 }}>
+      <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: C.greenDim,
+                     alignItems: "center", justifyContent: "center", marginRight: 8 }}>
+        <Text style={{ fontSize: 12 }}>🤖</Text>
+      </View>
+      <View style={{ backgroundColor: C.card, borderRadius: 14, borderTopLeftRadius: 4,
+                     paddingHorizontal: 12, paddingVertical: 8, flexDirection: "row",
+                     gap: 4, borderWidth: 1, borderColor: C.border }}>
+        {[d1, d2, d3].map((d, i) => (
+          <Animated.View key={i} style={{ width: 6, height: 6, borderRadius: 3,
+                                          backgroundColor: C.green, opacity: d }} />
+        ))}
+      </View>
+    </View>
+  );
+}
+
+// ── Message bubble ────────────────────────────────────────────────────────────
+function Bubble({ role, content }) {
+  const isUser = role === "user";
+  return (
+    <View style={{ flexDirection: "row", alignItems: "flex-end",
+                   paddingHorizontal: 12, paddingVertical: 3,
+                   justifyContent: isUser ? "flex-end" : "flex-start" }}>
+      {!isUser && (
+        <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: C.greenDim,
+                       alignItems: "center", justifyContent: "center", marginRight: 6, flexShrink: 0 }}>
+          <Text style={{ fontSize: 12 }}>🤖</Text>
+        </View>
+      )}
+      <View style={{ maxWidth: "80%", backgroundColor: isUser ? C.greenFaint : C.card,
+                     borderRadius: 14, borderTopRightRadius: isUser ? 4 : 14,
+                     borderTopLeftRadius: isUser ? 14 : 4,
+                     paddingHorizontal: 12, paddingVertical: 8,
+                     borderWidth: 1, borderColor: isUser ? C.greenDim : C.border }}>
+        <Text style={{ color: isUser ? C.green : C.white, fontFamily: MONO,
+                       fontSize: 12, lineHeight: 18 }}>
+          {content}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+function fetchWithTimeout(url, opts, ms) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), ms);
+  return fetch(url, { ...opts, signal: ctrl.signal }).finally(() => clearTimeout(t));
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
+export default function GrowverFAB({ screen, onOpenFull }) {
+  const [panelOpen, setPanelOpen]   = useState(false);
+  const [messages, setMessages]     = useState([]);
+  const [input, setInput]           = useState("");
+  const [loading, setLoading]       = useState(false);
+  const [model, setModel]           = useState("llama3.2");
+
+  const insets     = useSafeAreaInsets();
+  const slideAnim  = useRef(new Animated.Value(PANEL_H)).current;
+  const fadeAnim   = useRef(new Animated.Value(0)).current;
+  const scaleAnim  = useRef(new Animated.Value(0)).current;
+  const glowAnim   = useRef(new Animated.Value(0)).current;
+  const listRef    = useRef(null);
+  const inputRef   = useRef(null);
+  const hasOpened  = useRef(false);
+
+  // Entrance + glow when FAB mounts
+  useEffect(() => {
+    Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true,
+                                  tension: 80, friction: 6 }).start();
+    const glow = Animated.loop(Animated.sequence([
+      Animated.timing(glowAnim, { toValue: 1, duration: 1400, useNativeDriver: false }),
+      Animated.timing(glowAnim, { toValue: 0, duration: 1400, useNativeDriver: false }),
+    ]));
+    glow.start();
+    return () => glow.stop();
+  }, []);
+
+  const openPanel = useCallback(() => {
+    hasOpened.current = true;
+    setPanelOpen(true);
+    Animated.parallel([
+      Animated.spring(slideAnim, { toValue: 0, useNativeDriver: true,
+                                    tension: 65, friction: 11 }),
+      Animated.timing(fadeAnim,  { toValue: 1, duration: 220, useNativeDriver: true }),
+    ]).start();
+    // Probe Ollama silently on first open
+    if (!hasOpened.current) {
+      fetch(`${API_BASE_URL}/api/v1/growver/status`, { signal: AbortSignal.timeout?.(4000) })
+        .then(r => r.json()).then(d => { if (d.models?.length) setModel(d.models[0]); })
+        .catch(() => {});
+    }
+  }, []);
+
+  const closePanel = useCallback(() => {
+    Animated.parallel([
+      Animated.timing(slideAnim, { toValue: PANEL_H, duration: 260, useNativeDriver: true }),
+      Animated.timing(fadeAnim,  { toValue: 0,       duration: 200, useNativeDriver: true }),
+    ]).start(() => setPanelOpen(false));
+  }, []);
+
+  const addMsg = (role, content) => {
+    const m = { id: mid(), role, content };
+    setMessages(prev => [...prev, m]);
+    return m;
+  };
+
+  const send = useCallback(async (text) => {
+    const t = (text ?? input).trim();
+    if (!t || loading) return;
+    setInput("");
+    addMsg("user", t);
+    setLoading(true);
+
+    const history = [...messages, { role: "user", content: t }]
+      .slice(-MAX_HISTORY)
+      .map(({ role, content }) => ({ role, content }));
+
+    try {
+      const r = await fetchWithTimeout(
+        `${API_BASE_URL}/api/v1/growver/chat`,
+        { method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ messages: history, model }) },
+        120_000,
+      );
+      if (!r.ok) {
+        const e = await r.json().catch(() => ({}));
+        throw new Error(e.detail || `Error ${r.status}`);
+      }
+      const data = await r.json();
+      addMsg("assistant", data.reply);
+    } catch (e) {
+      addMsg("assistant", e.name === "AbortError"
+        ? "⚠️ Request timed out."
+        : `⚠️ ${e.message}`);
+    } finally {
+      setLoading(false);
+    }
+  }, [input, loading, messages, model]);
+
+  const borderColor = glowAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [C.greenDim, C.green],
+  });
+
+  const chips = SCREEN_CHIPS[screen] ?? SCREEN_CHIPS.grows;
+  const showChips = messages.length === 0 && !loading;
+
+  return (
+    <>
+      {/* ── Floating button ── */}
+      <Animated.View style={[styles.fab, {
+        bottom: insets.bottom + 74,
+        transform: [{ scale: scaleAnim }],
+      }]}>
+        <Animated.View style={[styles.fabInner, { borderColor }]}>
+          <TouchableOpacity onPress={openPanel} activeOpacity={0.8} style={styles.fabTouchable}>
+            <Text style={styles.fabIcon}>🤖</Text>
+          </TouchableOpacity>
+        </Animated.View>
+        <Text style={styles.fabLabel}>GROWVER</Text>
+      </Animated.View>
+
+      {/* ── Slide-up panel ── */}
+      {panelOpen && (
+        <Modal transparent visible={panelOpen} animationType="none"
+               onRequestClose={closePanel} statusBarTranslucent>
+
+          {/* Backdrop */}
+          <Animated.View style={[StyleSheet.absoluteFill, styles.backdrop, { opacity: fadeAnim }]}>
+            <TouchableOpacity style={StyleSheet.absoluteFill} onPress={closePanel} />
+          </Animated.View>
+
+          {/* Panel */}
+          <KeyboardAvoidingView style={styles.panelWrapper} behavior={Platform.OS === "ios" ? "padding" : "height"} pointerEvents="box-none">
+            <Animated.View style={[styles.panel, { transform: [{ translateY: slideAnim }] }]}>
+
+              {/* Drag handle */}
+              <View style={styles.handle} />
+
+              {/* Header */}
+              <View style={styles.header}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                  <Text style={styles.headerTitle}>🤖 GROWVER</Text>
+                  <View style={styles.aiBadge}><Text style={styles.aiBadgeText}>AI</Text></View>
+                </View>
+                <View style={{ flexDirection: "row", gap: 10, alignItems: "center" }}>
+                  {messages.length > 0 && (
+                    <TouchableOpacity onPress={() => setMessages([])}>
+                      <Text style={styles.headerBtn}>CLEAR</Text>
+                    </TouchableOpacity>
+                  )}
+                  <TouchableOpacity onPress={() => { closePanel(); setTimeout(onOpenFull, 300); }}>
+                    <Text style={[styles.headerBtn, { color: C.green }]}>FULL ↗</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={closePanel} style={styles.closeBtn}>
+                    <Text style={styles.closeBtnText}>✕</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Messages or suggestion chips */}
+              <View style={{ flex: 1 }}>
+                {showChips ? (
+                  <View style={styles.chipsContainer}>
+                    <Text style={styles.chipsLabel}>QUICK QUESTIONS</Text>
+                    {chips.map(c => (
+                      <TouchableOpacity key={c} onPress={() => send(c)} style={styles.chip}>
+                        <Text style={styles.chipText}>{c}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                ) : (
+                  <FlatList
+                    ref={listRef}
+                    data={messages}
+                    keyExtractor={m => m.id}
+                    renderItem={({ item }) => <Bubble role={item.role} content={item.content} />}
+                    ListFooterComponent={loading ? <TypingDots /> : null}
+                    onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
+                    contentContainerStyle={{ paddingVertical: 8 }}
+                    showsVerticalScrollIndicator={false}
+                  />
+                )}
+              </View>
+
+              {/* Input bar */}
+              <View style={[styles.inputRow, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+                <TextInput
+                  ref={inputRef}
+                  value={input}
+                  onChangeText={setInput}
+                  placeholder="Ask Growver..."
+                  placeholderTextColor={C.grey}
+                  multiline
+                  maxLength={800}
+                  style={styles.input}
+                  onSubmitEditing={() => send(input)}
+                  blurOnSubmit={false}
+                />
+                <TouchableOpacity
+                  onPress={() => send(input)}
+                  disabled={loading || !input.trim()}
+                  style={[styles.sendBtn, { backgroundColor: loading || !input.trim() ? C.grey : C.green }]}
+                >
+                  <Text style={styles.sendIcon}>↑</Text>
+                </TouchableOpacity>
+              </View>
+            </Animated.View>
+          </KeyboardAvoidingView>
+        </Modal>
+      )}
+    </>
+  );
+}
+
+// ── Styles ────────────────────────────────────────────────────────────────────
+const styles = StyleSheet.create({
+  fab:          { position: "absolute", right: 16, alignItems: "center" },
+  fabInner:     { width: 54, height: 54, borderRadius: 27, borderWidth: 2,
+                  backgroundColor: C.surface, alignItems: "center", justifyContent: "center",
+                  shadowColor: C.green, shadowOpacity: 0.5, shadowRadius: 8, elevation: 8 },
+  fabTouchable: { width: 54, height: 54, alignItems: "center", justifyContent: "center" },
+  fabIcon:      { fontSize: 26 },
+  fabLabel:     { color: C.greenDim, fontFamily: MONO, fontSize: 8,
+                  letterSpacing: 1, marginTop: 4 },
+  backdrop:     { backgroundColor: C.overlay },
+  panelWrapper: { flex: 1, justifyContent: "flex-end" },
+  panel:        { height: PANEL_H, backgroundColor: C.surface,
+                  borderTopLeftRadius: 20, borderTopRightRadius: 20,
+                  borderTopWidth: 2, borderLeftWidth: 1, borderRightWidth: 1,
+                  borderColor: C.greenDim, overflow: "hidden" },
+  handle:       { width: 36, height: 4, borderRadius: 2, backgroundColor: C.grey,
+                  alignSelf: "center", marginTop: 10, marginBottom: 6 },
+  header:       { flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+                  paddingHorizontal: 16, paddingBottom: 10,
+                  borderBottomWidth: 1, borderColor: C.border },
+  headerTitle:  { color: C.green, fontFamily: MONO, fontSize: 15, fontWeight: "bold" },
+  aiBadge:      { backgroundColor: C.greenFaint, borderRadius: 4,
+                  paddingHorizontal: 5, paddingVertical: 2 },
+  aiBadgeText:  { color: C.green, fontFamily: MONO, fontSize: 9 },
+  headerBtn:    { color: C.greyLight, fontFamily: MONO, fontSize: 11 },
+  closeBtn:     { width: 28, height: 28, borderRadius: 14, backgroundColor: C.card,
+                  borderWidth: 1, borderColor: C.border,
+                  alignItems: "center", justifyContent: "center" },
+  closeBtnText: { color: C.greyLight, fontSize: 13 },
+  chipsContainer: { padding: 14 },
+  chipsLabel:   { color: C.greyLight, fontFamily: MONO, fontSize: 10,
+                  letterSpacing: 1, marginBottom: 10, textAlign: "center" },
+  chip:         { backgroundColor: C.card, borderWidth: 1, borderColor: C.border,
+                  borderRadius: 18, paddingHorizontal: 14, paddingVertical: 9, marginBottom: 8 },
+  chipText:     { color: C.greyLight, fontFamily: MONO, fontSize: 12 },
+  inputRow:     { flexDirection: "row", alignItems: "flex-end", gap: 8,
+                  paddingHorizontal: 12, paddingTop: 8,
+                  borderTopWidth: 1, borderColor: C.border, backgroundColor: C.surface },
+  input:        { flex: 1, backgroundColor: C.card, color: C.white,
+                  fontFamily: MONO, fontSize: 13, paddingHorizontal: 14,
+                  paddingVertical: 10, borderRadius: 20, borderWidth: 1,
+                  borderColor: C.border, maxHeight: 100, minHeight: 42 },
+  sendBtn:      { width: 42, height: 42, borderRadius: 21,
+                  alignItems: "center", justifyContent: "center", flexShrink: 0 },
+  sendIcon:     { fontSize: 19, color: C.bg, marginTop: -2 },
+});

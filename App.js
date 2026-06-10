@@ -28,6 +28,7 @@ import Glossary             from "./Glossary";
 import VirtualGrow          from "./VirtualGrow";
 import OutdoorGuide         from "./OutdoorGuide";
 import Growver              from "./Growver";
+import GrowverFAB           from "./GrowverFAB";
 import { AppModeProvider, useAppMode } from "./AppMode";
 import {
   addNotificationResponseListener,
@@ -53,6 +54,9 @@ const C = {
 };
 
 const MONO = Platform.select({ ios: "Courier New", android: "monospace" });
+
+// Screens where the Growver FAB floats (excludes the Growver tab itself)
+const GROWVER_FAB_SCREENS = ["grows", "browse", "vpd", "grow", "outdoor"];
 
 // ── Tab definitions ───────────────────────────────────────────────────────────
 const TABS = [
@@ -215,6 +219,14 @@ function AppInner() {
         <View style={{ flex: 1, display: activeTab === "settings" ? "flex" : "none" }}>
           <SettingsScreen />
         </View>
+
+        {/* Growver FAB — floats above tab bar on relevant screens */}
+        {GROWVER_FAB_SCREENS.includes(activeTab) && (
+          <GrowverFAB
+            screen={activeTab}
+            onOpenFull={() => setActiveTab("growver")}
+          />
+        )}
 
       </View>
 
