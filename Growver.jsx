@@ -1,10 +1,11 @@
-// Growver.jsx — AI cannabis growing assistant (Ollama-powered)
+// Growver.jsx — AI cannabis growing assistant (Ollama chat + Claude Vision analysis)
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import {
   View, Text, TextInput, TouchableOpacity, FlatList,
-  KeyboardAvoidingView, Platform, Animated, ScrollView,
+  KeyboardAvoidingView, Platform, Animated, Alert, Image,
 } from "react-native";
+import * as ImagePicker from "expo-image-picker";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { API_BASE_URL } from "./apiConfig";
 
@@ -25,7 +26,6 @@ const C = {
 };
 const MONO = Platform.select({ ios: "Courier New", android: "monospace" });
 
-// Only send the last N messages to avoid blowing the model's context window
 const MAX_HISTORY = 12;
 
 const SUGGESTIONS = [
@@ -89,7 +89,7 @@ function TypingDots() {
 }
 
 // ── Message bubble ────────────────────────────────────────────────────────────
-function Bubble({ role, content }) {
+function Bubble({ role, content, imageUri }) {
   const isUser = role === "user";
   return (
     <View style={{
@@ -115,19 +115,29 @@ function Bubble({ role, content }) {
         borderRadius: 16,
         borderTopRightRadius: isUser ? 4 : 16,
         borderTopLeftRadius:  isUser ? 16 : 4,
-        paddingHorizontal: 14,
-        paddingVertical: 10,
+        overflow: "hidden",
         borderWidth: 1,
         borderColor: isUser ? C.greenDim : C.border,
       }}>
-        <Text style={{
-          color: isUser ? C.green : C.white,
-          fontFamily: MONO,
-          fontSize: 13,
-          lineHeight: 20,
-        }}>
-          {content}
-        </Text>
+        {imageUri && (
+          <Image
+            source={{ uri: imageUri }}
+            style={{ width: 220, height: 165 }}
+            resizeMode="cover"
+          />
+        )}
+        {!!content && (
+          <Text style={{
+            color: isUser ? C.green : C.white,
+            fontFamily: MONO,
+            fontSize: 13,
+            lineHeight: 20,
+            paddingHorizontal: 14,
+            paddingVertical: 10,
+          }}>
+            {content}
+          </Text>
+        )}
       </View>
     </View>
   );
@@ -141,7 +151,7 @@ function Suggestions({ onSelect }) {
         color: C.greyLight, fontFamily: MONO, fontSize: 11,
         textAlign: "center", marginBottom: 16, letterSpacing: 1,
       }}>
-        ASK ME ANYTHING ABOUT GROWING
+        ASK ME ANYTHING · OR SEND A PLANT PHOTO
       </Text>
       <View style={{ flexDirection: "row", flexWrap: "wrap", paddingHorizontal: 12, gap: 8, justifyContent: "center" }}>
         {SUGGESTIONS.map(s => (
@@ -163,27 +173,38 @@ function Suggestions({ onSelect }) {
 }
 
 // ── Status dot ────────────────────────────────────────────────────────────────
-function StatusDot({ status, onPress }) {
+function StatusDot({ status, visionAvailable, onPress }) {
   const color = status === "online" ? C.green : status === "offline" ? C.red : C.amber;
   const label = status === "online" ? "ONLINE" : status === "offline" ? "OFFLINE" : "...";
   return (
     <TouchableOpacity onPress={onPress} style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
       <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: color }} />
       <Text style={{ color, fontFamily: MONO, fontSize: 10, letterSpacing: 0.5 }}>{label}</Text>
+      {visionAvailable && (
+        <View style={{
+          backgroundColor: C.greenFaint, borderRadius: 4,
+          paddingHorizontal: 5, paddingVertical: 1,
+          borderWidth: 1, borderColor: C.greenDim,
+        }}>
+          <Text style={{ color: C.green, fontFamily: MONO, fontSize: 9 }}>👁 VISION</Text>
+        </View>
+      )}
     </TouchableOpacity>
   );
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
 export default function Growver() {
-  const [messages, setMessages]   = useState([]);
-  const [input, setInput]         = useState("");
-  const [loading, setLoading]     = useState(false);
-  const [status, setStatus]       = useState(null);   // null | "online" | "offline"
-  const [model, setModel]         = useState("llama3.2");
-  const flatListRef               = useRef(null);
-  const inputRef                  = useRef(null);
-  const insets                    = useSafeAreaInsets();
+  const [messages, setMessages]         = useState([]);
+  const [input, setInput]               = useState("");
+  const [loading, setLoading]           = useState(false);
+  const [status, setStatus]             = useState(null);
+  const [visionAvailable, setVision]    = useState(false);
+  const [model, setModel]               = useState("llama3.2");
+  const [pendingImage, setPendingImage] = useState(null); // { uri, base64, mediaType }
+  const flatListRef                     = useRef(null);
+  const inputRef                        = useRef(null);
+  const insets                          = useSafeAreaInsets();
 
   useEffect(() => { checkStatus(); }, []);
 
@@ -193,59 +214,133 @@ export default function Growver() {
       const r    = await fetchWithTimeout(`${API_BASE_URL}/api/v1/growver/status`, {}, 6000);
       const data = await r.json();
       setStatus(data.online ? "online" : "offline");
+      setVision(!!data.vision);
       if (data.models?.length) setModel(data.models[0]);
     } catch {
       setStatus("offline");
     }
   }, []);
 
-  const addMsg = (role, content) => {
-    const msg = { id: uid(), role, content };
+  const addMsg = (role, content, imageUri) => {
+    const msg = { id: uid(), role, content, imageUri };
     setMessages(prev => [...prev, msg]);
     return msg;
   };
 
+  // ── Pick image from camera or library ──────────────────────────────────────
+  const pickImageFrom = useCallback(async (source) => {
+    let result;
+    if (source === "camera") {
+      const { status: camStatus } = await ImagePicker.requestCameraPermissionsAsync();
+      if (camStatus !== "granted") {
+        Alert.alert("Permission needed", "Camera access is required to take plant photos.");
+        return;
+      }
+      result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.7,
+        base64: true,
+      });
+    } else {
+      const { status: libStatus } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (libStatus !== "granted") {
+        Alert.alert("Permission needed", "Photo library access is required.");
+        return;
+      }
+      result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.7,
+        base64: true,
+      });
+    }
+    if (!result.canceled && result.assets?.[0]) {
+      const asset = result.assets[0];
+      setPendingImage({
+        uri: asset.uri,
+        base64: asset.base64,
+        mediaType: asset.mimeType || "image/jpeg",
+      });
+    }
+  }, []);
+
+  const handlePickImage = useCallback(() => {
+    Alert.alert("Plant Photo", "Choose source", [
+      { text: "📷 Camera", onPress: () => pickImageFrom("camera") },
+      { text: "🖼 Gallery", onPress: () => pickImageFrom("library") },
+      { text: "Cancel", style: "cancel" },
+    ]);
+  }, [pickImageFrom]);
+
+  // ── Send message (text, vision, or both) ───────────────────────────────────
   const send = useCallback(async (text) => {
     const trimmed = (text ?? input).trim();
-    if (!trimmed || loading) return;
+    if ((!trimmed && !pendingImage) || loading) return;
     setInput("");
 
-    addMsg("user", trimmed);
+    const imageToSend = pendingImage;
+    setPendingImage(null);
+
+    addMsg("user", trimmed || "", imageToSend?.uri);
     setLoading(true);
 
-    // Pass trimmed conversation history so the model has context
-    const history = [...messages, { role: "user", content: trimmed }]
-      .slice(-MAX_HISTORY)
-      .map(({ role, content }) => ({ role, content }));
-
     try {
-      const r = await fetchWithTimeout(
-        `${API_BASE_URL}/api/v1/growver/chat`,
-        {
-          method:  "POST",
-          headers: { "Content-Type": "application/json" },
-          body:    JSON.stringify({ messages: history, model }),
-        },
-        120_000,
-      );
+      if (imageToSend) {
+        // ── Vision path: send photo to Claude ──────────────────────────────
+        const r = await fetchWithTimeout(
+          `${API_BASE_URL}/api/v1/growver/analyze`,
+          {
+            method:  "POST",
+            headers: { "Content-Type": "application/json" },
+            body:    JSON.stringify({
+              image_base64: imageToSend.base64,
+              media_type:   imageToSend.mediaType,
+              message:      trimmed || undefined,
+            }),
+          },
+          60_000,
+        );
 
-      if (!r.ok) {
-        const err = await r.json().catch(() => ({}));
-        throw new Error(err.detail || `Server error ${r.status}`);
+        if (!r.ok) {
+          const err = await r.json().catch(() => ({}));
+          throw new Error(err.detail || `Server error ${r.status}`);
+        }
+
+        const data = await r.json();
+        addMsg("assistant", data.analysis);
+      } else {
+        // ── Text path: send message to Ollama ──────────────────────────────
+        const history = [...messages, { role: "user", content: trimmed }]
+          .slice(-MAX_HISTORY)
+          .map(({ role, content }) => ({ role, content }));
+
+        const r = await fetchWithTimeout(
+          `${API_BASE_URL}/api/v1/growver/chat`,
+          {
+            method:  "POST",
+            headers: { "Content-Type": "application/json" },
+            body:    JSON.stringify({ messages: history, model }),
+          },
+          120_000,
+        );
+
+        if (!r.ok) {
+          const err = await r.json().catch(() => ({}));
+          throw new Error(err.detail || `Server error ${r.status}`);
+        }
+
+        const data = await r.json();
+        addMsg("assistant", data.reply);
       }
-
-      const data = await r.json();
-      addMsg("assistant", data.reply);
     } catch (e) {
       const msg = e.name === "AbortError"
         ? "Request timed out. Is Ollama still running?"
         : e.message ?? "Something went wrong.";
       addMsg("assistant", `⚠️ ${msg}`);
-      setStatus("offline");
+      if (!imageToSend) setStatus("offline");
     } finally {
       setLoading(false);
     }
-  }, [input, loading, messages, model]);
+  }, [input, loading, messages, model, pendingImage]);
 
   const handleSuggestion = (text) => {
     setInput(text);
@@ -280,7 +375,7 @@ export default function Growver() {
         </View>
 
         <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-          <StatusDot status={status} onPress={checkStatus} />
+          <StatusDot status={status} visionAvailable={visionAvailable} onPress={checkStatus} />
           {messages.length > 0 && (
             <TouchableOpacity onPress={clearChat}>
               <Text style={{ color: C.grey, fontFamily: MONO, fontSize: 11 }}>NEW CHAT</Text>
@@ -290,7 +385,7 @@ export default function Growver() {
       </View>
 
       {/* ── Offline banner ── */}
-      {status === "offline" && (
+      {status === "offline" && !visionAvailable && (
         <View style={{
           backgroundColor: "#2a0a0a", borderBottomWidth: 1, borderColor: "#5a1a1a",
           paddingHorizontal: 14, paddingVertical: 8,
@@ -314,13 +409,49 @@ export default function Growver() {
             ref={flatListRef}
             data={messages}
             keyExtractor={m => m.id}
-            renderItem={({ item }) => <Bubble role={item.role} content={item.content} />}
+            renderItem={({ item }) => (
+              <Bubble role={item.role} content={item.content} imageUri={item.imageUri} />
+            )}
             ListFooterComponent={loading ? <TypingDots /> : null}
             onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
             onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
             contentContainerStyle={{ paddingVertical: 12 }}
             showsVerticalScrollIndicator={false}
           />
+        )}
+
+        {/* ── Pending image preview ── */}
+        {pendingImage && (
+          <View style={{
+            flexDirection: "row", alignItems: "center",
+            paddingHorizontal: 12, paddingTop: 8, paddingBottom: 4,
+            backgroundColor: C.surface,
+            borderTopWidth: 1, borderColor: C.border,
+          }}>
+            <View>
+              <Image
+                source={{ uri: pendingImage.uri }}
+                style={{
+                  width: 60, height: 60, borderRadius: 8,
+                  borderWidth: 1, borderColor: C.green,
+                }}
+                resizeMode="cover"
+              />
+              <TouchableOpacity
+                onPress={() => setPendingImage(null)}
+                style={{
+                  position: "absolute", top: -6, right: -6,
+                  width: 18, height: 18, borderRadius: 9,
+                  backgroundColor: C.red, alignItems: "center", justifyContent: "center",
+                }}
+              >
+                <Text style={{ color: "#fff", fontSize: 10, fontWeight: "bold", lineHeight: 12 }}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <Text style={{ color: C.greyLight, fontFamily: MONO, fontSize: 11, marginLeft: 12 }}>
+              PHOTO ATTACHED · TAP ↑ TO ANALYSE
+            </Text>
+          </View>
         )}
 
         {/* ── Input bar ── */}
@@ -335,11 +466,27 @@ export default function Growver() {
           backgroundColor: C.surface,
           gap: 8,
         }}>
+          {/* Camera button */}
+          <TouchableOpacity
+            onPress={handlePickImage}
+            disabled={loading}
+            activeOpacity={0.75}
+            style={{
+              width: 44, height: 44, borderRadius: 22,
+              backgroundColor: pendingImage ? C.greenDim : C.card,
+              borderWidth: 1, borderColor: pendingImage ? C.green : C.border,
+              alignItems: "center", justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            <Text style={{ fontSize: 20 }}>📷</Text>
+          </TouchableOpacity>
+
           <TextInput
             ref={inputRef}
             value={input}
             onChangeText={setInput}
-            placeholder="Ask Growver anything..."
+            placeholder={pendingImage ? "Add a note or tap ↑ to send…" : "Ask Growver anything…"}
             placeholderTextColor={C.grey}
             multiline
             maxLength={1000}
@@ -362,11 +509,11 @@ export default function Growver() {
           />
           <TouchableOpacity
             onPress={() => send(input)}
-            disabled={loading || !input.trim()}
+            disabled={loading || (!input.trim() && !pendingImage)}
             activeOpacity={0.75}
             style={{
               width: 44, height: 44, borderRadius: 22,
-              backgroundColor: loading || !input.trim() ? C.grey : C.green,
+              backgroundColor: (loading || (!input.trim() && !pendingImage)) ? C.grey : C.green,
               alignItems: "center", justifyContent: "center",
               flexShrink: 0,
             }}
