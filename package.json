@@ -12,9 +12,12 @@
     "expo-status-bar": "~56.0.4",
     "react": "19.2.3",
     "react-native": "0.85.3",
-"react-native-safe-area-context": "^5.8.0",
-    "react-native-screens": "^4.25.2",
-    "react-native-svg": "^15.15.5"
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-screens": "~4.4.0",
+    "react-native-svg": "15.15.4"
+  },
+  "devDependencies": {
+    "babel-preset-expo": "~13.0.0"
   },
   "scripts": {
     "start": "expo start",
@@ -22,8 +25,5 @@
     "ios": "expo start --ios",
     "web": "expo start --web"
   },
-  "private": true,
-  "allowScripts": {
-    "@shopify/react-native-skia@2.6.4": true
-  }
+  "private": true
 }
