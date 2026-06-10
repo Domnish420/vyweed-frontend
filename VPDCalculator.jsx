@@ -174,8 +174,8 @@ function NumInput({ label, value, onChange, unit, min, max, step = 0.5 }) {
         borderWidth: 1, borderColor: C.border, overflow: "hidden",
       }}>
         <TouchableOpacity onPress={dec}
-          style={{ paddingHorizontal: 16, paddingVertical: 14, backgroundColor: C.card }}>
-          <Text style={{ color: C.white, fontFamily: MONO, fontSize: 20 }}>−</Text>
+          style={{ paddingHorizontal: 16, paddingVertical: 14, backgroundColor: C.surface }}>
+          <Text style={{ color: C.greyLight, fontFamily: MONO, fontSize: 20 }}>−</Text>
         </TouchableOpacity>
 
         <View style={{ flex: 1, alignItems: "center" }}>
@@ -186,8 +186,8 @@ function NumInput({ label, value, onChange, unit, min, max, step = 0.5 }) {
         </View>
 
         <TouchableOpacity onPress={inc}
-          style={{ paddingHorizontal: 16, paddingVertical: 14, backgroundColor: C.card }}>
-          <Text style={{ color: C.white, fontFamily: MONO, fontSize: 20 }}>+</Text>
+          style={{ paddingHorizontal: 16, paddingVertical: 14, backgroundColor: C.surface }}>
+          <Text style={{ color: C.greyLight, fontFamily: MONO, fontSize: 20 }}>+</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -318,12 +318,12 @@ export default function VPDCalculator() {
                   style={{
                     paddingHorizontal: 14, paddingVertical: 9,
                     borderRadius: 8, borderWidth: 1,
-                    borderColor: stage === s ? C.green : C.border,
-                    backgroundColor: stage === s ? C.greenFaint : C.surface,
+                    borderColor: stage === s ? "rgba(120,200,130,0.35)" : C.border,
+                    backgroundColor: stage === s ? "rgba(255,255,255,0.055)" : C.surface,
                   }}
                 >
                   <Text style={{
-                    color: stage === s ? C.green : C.greyLight,
+                    color: stage === s ? "rgba(170,230,178,0.9)" : C.greyLight,
                     fontFamily: MONO, fontSize: 12,
                   }}>
                     {STAGE_TARGETS[s].label}

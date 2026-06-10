@@ -725,7 +725,7 @@ function TermRow({ term, onPress, last }) {
         paddingVertical: 12, paddingHorizontal: 16,
         borderBottomWidth: last ? 0 : 1, borderColor: C.border }}>
         <View style={{ width: 8, height: 8, borderRadius: 4,
-          backgroundColor: col, marginRight: 12 }} />
+          backgroundColor: col, marginRight: 16 }} />
         <View style={{ flex: 1 }}>
           <Text style={{ color: C.white, fontFamily: MONO, fontSize: 14, fontWeight: "bold" }}>
             {term.term}
@@ -886,42 +886,50 @@ export default function Glossary({ onBack }) {
       </View>
 
       {/* Term list grouped by letter */}
-      <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
-        {filtered.length === 0 ? (
-          <View style={{ alignItems: "center", paddingVertical: 60 }}>
-            <Text style={{ fontSize: 36 }}>🔍</Text>
-            <Text style={{ color: C.grey, fontFamily: MONO,
-              fontSize: 13, marginTop: 12 }}>
-              No terms found for "{query}"
-            </Text>
-          </View>
-        ) : (
-          grouped.map(([letter, terms]) => (
-            <View key={letter}>
-              {/* Letter header */}
-              <View style={{ backgroundColor: C.surface, paddingHorizontal: 16,
-                paddingVertical: 6, borderBottomWidth: 1, borderColor: C.border }}>
-                <Text style={{ color: C.green, fontFamily: MONO,
-                  fontSize: 13, fontWeight: "bold" }}>
-                  {letter}
-                </Text>
-              </View>
-              {/* Terms */}
-              <View style={{ backgroundColor: C.card, borderBottomWidth: 1,
-                borderColor: C.border }}>
-                {terms.map((term, i) => (
-                  <TermRow
-                    key={term.term}
-                    term={term}
-                    onPress={() => setSelectedTerm(term)}
-                    last={i === terms.length - 1}
-                  />
-                ))}
-              </View>
+      <View style={{ flex: 1 }}>
+        <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
+          {filtered.length === 0 ? (
+            <View style={{ alignItems: "center", paddingVertical: 60 }}>
+              <Text style={{ fontSize: 36 }}>🔍</Text>
+              <Text style={{ color: C.grey, fontFamily: MONO,
+                fontSize: 13, marginTop: 12 }}>
+                No terms found for "{query}"
+              </Text>
             </View>
-          ))
-        )}
-      </ScrollView>
+          ) : (
+            grouped.map(([letter, terms]) => (
+              <View key={letter}>
+                {/* Letter header */}
+                <View style={{ backgroundColor: C.surface, paddingHorizontal: 16,
+                  paddingVertical: 6, borderBottomWidth: 1, borderColor: C.border }}>
+                  <Text style={{ color: "rgba(195,220,200,0.65)", fontFamily: MONO,
+                    fontSize: 13, fontWeight: "bold" }}>
+                    {letter}
+                  </Text>
+                </View>
+                {/* Terms */}
+                <View style={{ backgroundColor: C.card, borderBottomWidth: 1,
+                  borderColor: C.border }}>
+                  {terms.map((term, i) => (
+                    <TermRow
+                      key={term.term}
+                      term={term}
+                      onPress={() => setSelectedTerm(term)}
+                      last={i === terms.length - 1}
+                    />
+                  ))}
+                </View>
+              </View>
+            ))
+          )}
+        </ScrollView>
+        {/* Bottom vignette */}
+        <View pointerEvents="none" style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 48 }}>
+          <View style={{ flex: 1, backgroundColor: "rgba(7,10,7,0.55)" }} />
+          <View style={{ height: 16, backgroundColor: "rgba(7,10,7,0.75)" }} />
+          <View style={{ height: 8, backgroundColor: "rgba(7,10,7,0.92)" }} />
+        </View>
+      </View>
 
       {/* Term detail modal */}
       <TermModal

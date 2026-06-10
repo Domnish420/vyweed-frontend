@@ -802,13 +802,18 @@ function StrainCard({ strain, onPress, hasTrophy, compareMode, isInCompare }) {
   return (
     <TouchableOpacity onPress={onPress} activeOpacity={0.8}>
       <View style={{
-        backgroundColor: isInCompare ? `${C.purple}20` : C.card,
-        borderRadius: 8,
-        borderWidth: isInCompare ? 2 : 1,
-        borderColor: isInCompare ? C.purple : C.border,
-        borderLeftWidth: 3, borderLeftColor: isInCompare ? C.purple : typeCol,
-        padding: 12, marginBottom: 8,
+        backgroundColor: isInCompare ? `${C.purple}15` : "rgba(255,255,255,0.03)",
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: isInCompare ? C.purple : "rgba(255,255,255,0.07)",
+        padding: 12, paddingRight: isInCompare ? 12 : 28, marginBottom: 10,
       }}>
+        {/* Chevron — tap indicator */}
+        {!compareMode && (
+          <View style={{ position: "absolute", right: 10, top: 0, bottom: 0, justifyContent: "center" }}>
+            <Text style={{ color: "rgba(255,255,255,0.2)", fontSize: 20 }}>›</Text>
+          </View>
+        )}
         {/* Compare mode indicator */}
         {compareMode && (
           <View style={{ position: "absolute", top: 10, right: 10,
@@ -878,7 +883,6 @@ function StrainCard({ strain, onPress, hasTrophy, compareMode, isInCompare }) {
         {strain.terpenes?.length > 0 && (
           <Text style={{ color: C.grey, fontFamily: MONO, fontSize: 10, marginTop: 6 }}>
             🧪 {strain.terpenes.slice(0, 3).join(" · ")}
-            <Text style={{ color: C.greenDim }}> · tap strain for details</Text>
           </Text>
         )}
       </View>
@@ -1329,13 +1333,24 @@ function StrainDetailScreen({ strainId, onBack, onStartGrow, onNavigateToStrain 
       {/* Header */}
       <View style={{
         paddingHorizontal: 16,
-        paddingTop: Platform.OS === "android" ? 16 : 52,
+        paddingTop: Platform.OS === "android" ? (StatusBar.currentHeight || 24) + 8 : 52,
         paddingBottom: 12,
-        borderBottomWidth: 1, borderColor: C.border,
-        backgroundColor: C.card,
+        borderBottomWidth: 1, borderColor: "rgba(255,255,255,0.06)",
+        backgroundColor: "rgba(13,18,13,0.96)",
       }}>
-        <TouchableOpacity onPress={onBack} style={{ marginBottom: 8 }}>
-          <Text style={{ color: C.green, fontFamily: MONO, fontSize: 14 }}>← BACK</Text>
+        <TouchableOpacity
+          onPress={onBack}
+          style={{
+            marginBottom: 10,
+            alignSelf: "flex-start",
+            width: 36, height: 36,
+            borderRadius: 18,
+            backgroundColor: "rgba(255,255,255,0.05)",
+            borderWidth: 1, borderColor: "rgba(255,255,255,0.1)",
+            alignItems: "center", justifyContent: "center",
+          }}
+        >
+          <Text style={{ color: C.green, fontFamily: MONO, fontSize: 18, lineHeight: 22 }}>‹</Text>
         </TouchableOpacity>
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
           <Text style={{ color: C.white, fontFamily: MONO, fontSize: 22,
@@ -1454,8 +1469,8 @@ function StrainDetailScreen({ strainId, onBack, onStartGrow, onNavigateToStrain 
                   <TouchableOpacity key={i} onPress={() => setSelectedTerpene(t)}
                     activeOpacity={0.7}
                     style={{
-                      backgroundColor: `${col}15`, borderRadius: 6,
-                      borderWidth: 1, borderColor: col,
+                      backgroundColor: `${col}10`, borderRadius: 8,
+                      borderWidth: 1, borderColor: "rgba(255,255,255,0.1)",
                       paddingHorizontal: 12, paddingVertical: 8,
                       flexDirection: "row", alignItems: "center", gap: 6,
                     }}>
@@ -1466,7 +1481,7 @@ function StrainDetailScreen({ strainId, onBack, onStartGrow, onNavigateToStrain 
                         {t}
                       </Text>
                       {info && (
-                        <Text style={{ color: C.grey, fontFamily: MONO, fontSize: 9 }}>
+                        <Text style={{ color: "rgba(255,255,255,0.35)", fontFamily: MONO, fontSize: 9 }}>
                           {info.aroma.split(",")[0]}
                         </Text>
                       )}

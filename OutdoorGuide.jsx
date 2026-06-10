@@ -240,7 +240,7 @@ export default function OutdoorGuide({ onBack }) {
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center",
           padding: 32 }}>
           <Text style={{ fontSize: 48 }}>📍</Text>
-          <Text style={{ color: C.red, fontFamily: MONO,
+          <Text style={{ color: C.amber, fontFamily: MONO,
             fontSize: 14, fontWeight: "bold", marginTop: 16 }}>
             LOCATION UNAVAILABLE
           </Text>
@@ -249,10 +249,10 @@ export default function OutdoorGuide({ onBack }) {
             {error}{"\n\n"}Allow location access to get outdoor growing advice for your area.
           </Text>
           <TouchableOpacity onPress={getLocationAndWeather}
-            style={{ marginTop: 20, backgroundColor: C.greenFaint,
-              borderRadius: 8, borderWidth: 1, borderColor: C.green,
-              paddingHorizontal: 24, paddingVertical: 12 }}>
-            <Text style={{ color: C.green, fontFamily: MONO, fontSize: 13 }}>
+            style={{ marginTop: 20, backgroundColor: C.greenDim,
+              borderRadius: 12,
+              paddingHorizontal: 28, paddingVertical: 14 }}>
+            <Text style={{ color: C.white, fontFamily: MONO, fontSize: 13, fontWeight: "bold" }}>
               TRY AGAIN
             </Text>
           </TouchableOpacity>

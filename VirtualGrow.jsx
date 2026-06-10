@@ -899,8 +899,13 @@ export default function VirtualGrow() {
             <Text style={{ color: C.grey, fontFamily: MONO, fontSize: 10 }}>
               DAY 1
             </Text>
-            <Text style={{ color: description?.isHarvest ? "#ffd700" : C.green,
-              fontFamily: MONO, fontSize: 14, fontWeight: "bold" }}>
+            <Text style={{
+              color: description?.isHarvest ? "#ffd700" : C.green,
+              fontFamily: MONO, fontSize: 14, fontWeight: "bold",
+              textShadowColor: description?.isHarvest ? "#ffd70088" : `${C.green}88`,
+              textShadowOffset: { width: 0, height: 0 },
+              textShadowRadius: 6,
+            }}>
               DAY {day} — {description?.stage?.toUpperCase()}
             </Text>
             <Text style={{ color: C.grey, fontFamily: MONO, fontSize: 10 }}>
@@ -966,54 +971,60 @@ export default function VirtualGrow() {
         {/* Day description */}
         {description && (
           <>
-            {/* Visual description */}
-            <View style={{ marginHorizontal: 16, backgroundColor: C.card,
-              borderRadius: 8, borderWidth: 1, borderColor: C.border,
-              borderLeftWidth: 3, borderLeftColor: METALS[metal].colour,
-              padding: 14, marginBottom: 10 }}>
-              <Text style={{ color: C.greyLight, fontFamily: MONO, fontSize: 10,
-                letterSpacing: 1.5, marginBottom: 6 }}>👁 WHAT YOU SEE</Text>
-              <Text style={{ color: C.white, fontFamily: MONO,
-                fontSize: 13, lineHeight: 20 }}>
-                {description.visual}
-              </Text>
-            </View>
+            <ScrollView
+              style={{ maxHeight: 260, marginHorizontal: 16, marginBottom: 6 }}
+              nestedScrollEnabled
+              showsVerticalScrollIndicator={false}
+            >
+              {/* Visual description */}
+              <View style={{ backgroundColor: C.card,
+                borderRadius: 8, borderWidth: 1, borderColor: C.border,
+                borderLeftWidth: 3, borderLeftColor: METALS[metal].colour,
+                padding: 14, marginBottom: 10 }}>
+                <Text style={{ color: C.greyLight, fontFamily: MONO, fontSize: 10,
+                  letterSpacing: 1.5, marginBottom: 6 }}>👁 WHAT YOU SEE</Text>
+                <Text style={{ color: C.white, fontFamily: MONO,
+                  fontSize: 13, lineHeight: 20 }}>
+                  {description.visual}
+                </Text>
+              </View>
 
-            {/* Smell */}
-            <View style={{ marginHorizontal: 16, backgroundColor: C.card,
-              borderRadius: 8, borderWidth: 1, borderColor: C.border,
-              padding: 14, marginBottom: 10 }}>
-              <Text style={{ color: C.greyLight, fontFamily: MONO, fontSize: 10,
-                letterSpacing: 1.5, marginBottom: 6 }}>👃 WHAT YOU SMELL</Text>
-              <Text style={{ color: C.purple, fontFamily: MONO,
-                fontSize: 13, lineHeight: 20 }}>
-                {description.smell}
-              </Text>
-            </View>
+              {/* Smell */}
+              <View style={{ backgroundColor: C.card,
+                borderRadius: 8, borderWidth: 1, borderColor: C.border,
+                padding: 14, marginBottom: 10 }}>
+                <Text style={{ color: C.greyLight, fontFamily: MONO, fontSize: 10,
+                  letterSpacing: 1.5, marginBottom: 6 }}>👃 WHAT YOU SMELL</Text>
+                <Text style={{ color: C.purple, fontFamily: MONO,
+                  fontSize: 13, lineHeight: 20 }}>
+                  {description.smell}
+                </Text>
+              </View>
 
-            {/* What's happening */}
-            <View style={{ marginHorizontal: 16, backgroundColor: C.card,
-              borderRadius: 8, borderWidth: 1, borderColor: C.border,
-              padding: 14, marginBottom: 10 }}>
-              <Text style={{ color: C.greyLight, fontFamily: MONO, fontSize: 10,
-                letterSpacing: 1.5, marginBottom: 6 }}>🌱 WHAT'S HAPPENING</Text>
-              <Text style={{ color: C.greyLight, fontFamily: MONO,
-                fontSize: 12, lineHeight: 19 }}>
-                {description.stageDesc}
-              </Text>
-            </View>
+              {/* What's happening */}
+              <View style={{ backgroundColor: C.card,
+                borderRadius: 8, borderWidth: 1, borderColor: C.border,
+                padding: 14, marginBottom: 10 }}>
+                <Text style={{ color: C.greyLight, fontFamily: MONO, fontSize: 10,
+                  letterSpacing: 1.5, marginBottom: 6 }}>🌱 WHAT'S HAPPENING</Text>
+                <Text style={{ color: C.greyLight, fontFamily: MONO,
+                  fontSize: 12, lineHeight: 19 }}>
+                  {description.stageDesc}
+                </Text>
+              </View>
 
-            {/* Grower tip */}
-            <View style={{ marginHorizontal: 16, backgroundColor: C.greenFaint,
-              borderRadius: 8, borderWidth: 1, borderColor: C.greenDim,
-              padding: 14, marginBottom: 16 }}>
-              <Text style={{ color: C.greenDim, fontFamily: MONO, fontSize: 10,
-                letterSpacing: 1.5, marginBottom: 6 }}>💡 IF THIS WERE REAL</Text>
-              <Text style={{ color: C.white, fontFamily: MONO,
-                fontSize: 12, lineHeight: 19 }}>
-                {description.tip}
-              </Text>
-            </View>
+              {/* Grower tip */}
+              <View style={{ backgroundColor: C.greenFaint,
+                borderRadius: 8, borderWidth: 1, borderColor: C.greenDim,
+                padding: 14, marginBottom: 6 }}>
+                <Text style={{ color: C.greenDim, fontFamily: MONO, fontSize: 10,
+                  letterSpacing: 1.5, marginBottom: 6 }}>💡 IF THIS WERE REAL</Text>
+                <Text style={{ color: C.white, fontFamily: MONO,
+                  fontSize: 12, lineHeight: 19 }}>
+                  {description.tip}
+                </Text>
+              </View>
+            </ScrollView>
 
             {/* Shelve button — only at harvest */}
             {description.isHarvest && !alreadyShelved && (
