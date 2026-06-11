@@ -216,7 +216,6 @@ export default function Growver() {
       const data = await r.json();
       setStatus(data.online ? "online" : "offline");
       setVisionModel(data.vision_model || null);
-      if (data.models?.length) setModel(data.models[0]);
     } catch {
       setStatus("offline");
     }
