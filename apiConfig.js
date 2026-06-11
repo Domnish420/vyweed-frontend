@@ -2,7 +2,21 @@ import Constants from 'expo-constants';
 
 const extra = Constants.expoConfig?.extra ?? {};
 
-export const API_BASE_URL = extra.apiBaseUrl ?? 'http://localhost:8000';
+// In Expo Go dev builds, hostUri is the Metro server's "IP:port".
+// Extract the IP and assume the backend is on the same machine at port 8000.
+// EAS-built APKs always have apiBaseUrl set via environment secret, so this
+// fallback only fires during local `npx expo start` sessions.
+function resolveApiBaseUrl() {
+  if (extra.apiBaseUrl) return extra.apiBaseUrl;
+  const hostUri = Constants.expoConfig?.hostUri;
+  if (hostUri) {
+    const ip = hostUri.split(':')[0];
+    return `http://${ip}:8000`;
+  }
+  return 'http://localhost:8000';
+}
+
+export const API_BASE_URL = resolveApiBaseUrl();
 export const API_V1       = `${API_BASE_URL}/api/v1`;
 
 // Bypasses ngrok's browser interstitial page on free-tier tunnels.
