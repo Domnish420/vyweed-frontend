@@ -119,7 +119,7 @@ export async function checkConnection(apiBase) {
     const controller = new AbortController();
     setTimeout(() => controller.abort(), 3000);
     const res = await fetch(`${apiBase.replace("/api/v1", "")}/health`,
-      { signal: controller.signal });
+      { signal: controller.signal, headers: BACKEND_HEADERS });
     setOnline(res.ok);
     return res.ok;
   } catch {

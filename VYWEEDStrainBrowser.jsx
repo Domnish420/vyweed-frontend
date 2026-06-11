@@ -622,12 +622,12 @@ const SCREEN_INFO = {
       {
         icon: "🔗",
         title: "API URL",
-        text: "This is the address of the VYWEED backend server running on your device. If you're running the backend in Termux on the same phone, it should be http://localhost:8000/api/v1. If you're running it on another device on the same WiFi network, use that device's local IP address instead.",
+        text: "This is the address of the VYWEED backend server. The backend runs on your PC — make sure it's started with start.ps1 and your phone is on the same WiFi. The URL is auto-detected from the Metro server IP.",
       },
       {
         icon: "🧪",
         title: "TEST CONNECTION",
-        text: "Tap this to check if the app can reach the backend server. If it fails, make sure Termux is open and uvicorn is running. The strain browser and grow tracker both need the backend to work.",
+        text: "Tap this to check if the app can reach the backend server. If it fails, make sure the backend (start.ps1) and Ollama are running on your PC, and that your phone is on the same WiFi network.",
       },
       {
         icon: "📏",
@@ -1952,7 +1952,7 @@ export default function VYWEEDStrainBrowser({ onSelectStrain }) {
       }
       setTotal(data.total);
     } catch (e) {
-      Alert.alert("No data", "Can't reach server and no cached data available.\nStart the backend in Termux.");
+      Alert.alert("No data", "Can't reach server and no cached data available.\nMake sure the backend and Ollama are running on your PC.");
     } finally {
       setLoading(false);
       setLoadingMore(false);

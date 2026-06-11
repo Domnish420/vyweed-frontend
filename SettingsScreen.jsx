@@ -442,7 +442,7 @@ export default function SettingsScreen() {
             <Text style={{ color: C.greyLight, fontFamily: MONO, fontSize: 12 }}>v1 · 5,034 datasets</Text>
           } />
           <SettingRow label="PLATFORM"
-            sub="Built on Samsung S22 · Termux + Expo Go"
+            sub="Built on Samsung S22 · Expo Go + PC backend"
             right={
               <Text style={{ color: C.green, fontFamily: MONO, fontSize: 14 }}>📱</Text>
             }
@@ -497,8 +497,8 @@ export default function SettingsScreen() {
                 </Text>
               </View>
               {[
-                { icon: "🔗", title: "API URL", text: "This is the address of the VYWEED brain — the backend server running in Termux. Think of it like a phone number the app calls to get strain data and grow reports. If you're running Termux on this same phone, the default localhost:8000 is correct. If something stops working, check that Termux is open and the backend is running." },
-                { icon: "🧪", title: "TEST CONNECTION", text: "Tapping this checks if the app can currently reach the backend. Green = connected and working. Red = can't reach it. If it fails: open Termux, go to the vyweed-backend folder, and run uvicorn main:app --host 0.0.0.0 --port 8000" },
+                { icon: "🔗", title: "API URL", text: "This is the address of the VYWEED backend server running on your PC. The app auto-detects this during development. If auto-detection fails, enter your PC's local IP manually, e.g. http://192.168.1.x:8000/api/v1. If using ngrok, enter the ngrok URL instead." },
+                { icon: "🧪", title: "TEST CONNECTION", text: "Tapping this checks if the app can currently reach the backend. Green = connected and working. Red = can't reach it. If it fails: make sure the backend (start.ps1) and Ollama are running on your PC, and your phone is on the same WiFi network." },
                 { icon: "📏", title: "UNITS", text: "Metric = grams (g), centimetres (cm), Celsius (°C). This is used worldwide and in all scientific contexts. Imperial = ounces (oz), inches (in), Fahrenheit (°F). This is mainly used in the USA. Choose whichever feels natural to you — the calculations stay the same." },
                 { icon: "🌱", title: "DEFAULT MEDIUM", text: "Your growing medium is what your plant's roots live in. Soil = compost/potting mix, the most forgiving, best for beginners, naturally buffers pH mistakes. Coco = coconut husk fibre, faster growth than soil, needs more frequent watering and feeding. Hydro = roots grow in water, fastest growth possible, most technical and unforgiving of mistakes." },
               ].map((s, i) => (
@@ -515,7 +515,7 @@ export default function SettingsScreen() {
                 borderColor: C.blue, padding: 14 }}>
                 <Label style={{ color: C.blue, marginBottom: 6 }}>💡 PRO TIP</Label>
                 <Text style={{ color: C.white, fontFamily: MONO, fontSize: 13, lineHeight: 19 }}>
-                  {"If the app shows 'connection error' anywhere, come here first and tap TEST CONNECTION. 90% of connection issues are just Termux being closed in the background. Open Termux, restart the backend, come back here, test again."}
+                  {"If the app shows 'connection error' anywhere, come here first and tap TEST CONNECTION. Make sure your PC has ollama serve, start.ps1 (backend), and ngrok http 8000 all running. Then test again."}
                 </Text>
               </View>
             </ScrollView>
