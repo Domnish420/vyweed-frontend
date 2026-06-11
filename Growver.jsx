@@ -238,7 +238,7 @@ export default function Growver() {
         return;
       }
       result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaType.Images,
+        mediaTypes: ['images'],
         quality: 0.4,
         base64: true,
       });
@@ -249,7 +249,7 @@ export default function Growver() {
         return;
       }
       result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaType.Images,
+        mediaTypes: ['images'],
         quality: 0.4,
         base64: true,
       });
