@@ -299,7 +299,7 @@ export default function Growver() {
               model:        visionModel || "llava",
             }),
           },
-          60_000,
+          180_000,
         );
 
         if (!r.ok) {
@@ -334,8 +334,9 @@ export default function Growver() {
         addMsg("assistant", data.reply);
       }
     } catch (e) {
-      const msg = e.name === "AbortError"
-        ? "Request timed out. Is Ollama still running?"
+      const isTimeout = e.name === "AbortError" || e.message?.includes("cancelled") || e.message?.includes("aborted");
+      const msg = isTimeout
+        ? "Request timed out — llava can take 2-3 min on first load. Try again."
         : e.message ?? "Something went wrong.";
       addMsg("assistant", `⚠️ ${msg}`);
       if (!imageToSend) setStatus("offline");
