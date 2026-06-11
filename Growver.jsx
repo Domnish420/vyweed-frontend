@@ -531,6 +531,9 @@ export default function Growver() {
 function fetchWithTimeout(url, options, ms) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), ms);
-  return fetch(url, { ...options, signal: controller.signal })
-    .finally(() => clearTimeout(timer));
+  return fetch(url, {
+    ...options,
+    signal: controller.signal,
+    headers: { 'ngrok-skip-browser-warning': 'true', ...options?.headers },
+  }).finally(() => clearTimeout(timer));
 }

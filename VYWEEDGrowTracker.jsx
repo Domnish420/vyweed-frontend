@@ -32,7 +32,7 @@ import {
 const { width: SW } = Dimensions.get("window");
 
 // ── Config ────────────────────────────────────────────────────────────────────
-import { API_V1 as API_BASE } from "./apiConfig";
+import { API_V1 as API_BASE, BACKEND_HEADERS } from "./apiConfig";
 
 // ── Palette ───────────────────────────────────────────────────────────────────
 const C = {
@@ -67,7 +67,7 @@ const api = {
   async post(path, body) {
     const r = await fetch(`${API_BASE}${path}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { ...BACKEND_HEADERS, "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
     if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
@@ -76,14 +76,14 @@ const api = {
   async patch(path, body) {
     const r = await fetch(`${API_BASE}${path}`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: { ...BACKEND_HEADERS, "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
     if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
     return r.json();
   },
   async del(path) {
-    const r = await fetch(`${API_BASE}${path}`, { method: "DELETE" });
+    const r = await fetch(`${API_BASE}${path}`, { method: "DELETE", headers: BACKEND_HEADERS });
     if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
     return r.json();
   },

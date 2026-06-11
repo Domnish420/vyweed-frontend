@@ -5,6 +5,10 @@ const extra = Constants.expoConfig?.extra ?? {};
 export const API_BASE_URL = extra.apiBaseUrl ?? 'http://localhost:8000';
 export const API_V1       = `${API_BASE_URL}/api/v1`;
 
+// Bypasses ngrok's browser interstitial page on free-tier tunnels.
+// Harmless when using a direct IP or real domain.
+export const BACKEND_HEADERS = { 'ngrok-skip-browser-warning': 'true' };
+
 export const ENDPOINTS = {
   strains:       `${API_BASE_URL}/strains`,
   search:        `${API_BASE_URL}/search`,

@@ -108,7 +108,11 @@ function Bubble({ role, content }) {
 function fetchWithTimeout(url, opts, ms) {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), ms);
-  return fetch(url, { ...opts, signal: ctrl.signal }).finally(() => clearTimeout(t));
+  return fetch(url, {
+    ...opts,
+    signal: ctrl.signal,
+    headers: { 'ngrok-skip-browser-warning': 'true', ...opts?.headers },
+  }).finally(() => clearTimeout(t));
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
@@ -150,7 +154,7 @@ export default function GrowverFAB({ screen, onOpenFull }) {
     ]).start();
     // Probe Ollama silently on first open
     if (!hasOpened.current) {
-      fetch(`${API_BASE_URL}/api/v1/growver/status`, { signal: AbortSignal.timeout?.(4000) })
+      fetch(`${API_BASE_URL}/api/v1/growver/status`, { signal: AbortSignal.timeout?.(4000), headers: { 'ngrok-skip-browser-warning': 'true' } })
         .then(r => r.json()).then(d => { if (d.models?.length) setModel(d.models[0]); })
         .catch(() => {});
     }

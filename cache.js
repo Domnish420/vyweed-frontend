@@ -11,6 +11,7 @@
  */
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { BACKEND_HEADERS } from "./apiConfig";
 
 const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
 const TIMEOUT   = 4000;                  // 4 second network timeout
@@ -42,7 +43,7 @@ export async function cachedFetch(url, opts = {}) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), opts.timeout || TIMEOUT);
 
-    const res = await fetch(url, { signal: controller.signal });
+    const res = await fetch(url, { signal: controller.signal, headers: BACKEND_HEADERS });
     clearTimeout(timer);
 
     if (!res.ok) throw new Error(`${res.status}`);

@@ -19,7 +19,7 @@ import {
 import Svg, { Line, Polyline, Circle, Rect, Text as SvgText } from "react-native-svg";
 
 const { width: SW } = Dimensions.get("window");
-import { API_V1 as API_BASE } from "./apiConfig";
+import { API_V1 as API_BASE, BACKEND_HEADERS } from "./apiConfig";
 
 const C = {
   bg:         "#070a07",
@@ -286,7 +286,7 @@ export default function GrowTimeline({ growId, strainName, onBack }) {
   const [selectedLog, setSelectedLog]   = useState(null);
 
   useEffect(() => {
-    fetch(`${API_BASE}/tracker/grows/${growId}/timeline`)
+    fetch(`${API_BASE}/tracker/grows/${growId}/timeline`, { headers: BACKEND_HEADERS })
       .then(r => r.json())
       .then(setTimeline)
       .catch(e => Alert.alert("Error", e.message))

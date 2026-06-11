@@ -17,7 +17,7 @@ import {
   ActivityIndicator, Modal, Platform, Alert,
 } from "react-native";
 
-import { API_V1 as API_BASE } from "./apiConfig";
+import { API_V1 as API_BASE, BACKEND_HEADERS } from "./apiConfig";
 
 const C = {
   bg:         "#070a07",
@@ -327,7 +327,7 @@ export default function NutrientSchedule({ strainId, strainName, flowerWeeks, me
   const currentWeek = null;
 
   useEffect(() => {
-    fetch(`${API_BASE}/nutrients/${strainId}?medium=${medium}&flower_weeks=${flowerWeeks}`)
+    fetch(`${API_BASE}/nutrients/${strainId}?medium=${medium}&flower_weeks=${flowerWeeks}`, { headers: BACKEND_HEADERS })
       .then(r => r.json())
       .then(data => {
         setSchedule(data);
