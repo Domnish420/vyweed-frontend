@@ -6,6 +6,7 @@ import {
   KeyboardAvoidingView, Platform, Animated, Alert, Image,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
+import * as ImageManipulator from "expo-image-manipulator";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { getApiBaseUrl } from "./apiConfig";
 const API_BASE_URL = { toString: () => getApiBaseUrl() };
@@ -239,8 +240,7 @@ export default function Growver() {
       }
       result = await ImagePicker.launchCameraAsync({
         mediaTypes: ['images'],
-        quality: 0.4,
-        base64: true,
+        quality: 1,
       });
     } else {
       const { status: libStatus } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -250,16 +250,20 @@ export default function Growver() {
       }
       result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
-        quality: 0.4,
-        base64: true,
+        quality: 1,
       });
     }
     if (!result.canceled && result.assets?.[0]) {
       const asset = result.assets[0];
+      const resized = await ImageManipulator.manipulateAsync(
+        asset.uri,
+        [{ resize: { width: 1024 } }],
+        { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG, base64: true },
+      );
       setPendingImage({
-        uri: asset.uri,
-        base64: asset.base64,
-        mediaType: asset.mimeType || "image/jpeg",
+        uri: resized.uri,
+        base64: resized.base64,
+        mediaType: "image/jpeg",
       });
     }
   }, []);
