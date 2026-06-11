@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import { clearCache, checkConnection } from "./cache";
 import { useAppMode } from "./AppMode";
-import { API_V1 } from "./apiConfig";
+import { API_V1, setApiBaseUrl } from "./apiConfig";
 
 // Try to import AsyncStorage — gracefully fail if not installed
 let AsyncStorage = null;
@@ -133,6 +133,7 @@ export default function SettingsScreen() {
   }, []);
 
   const save = async () => {
+    if (settings.api_url) setApiBaseUrl(settings.api_url);
     if (AsyncStorage) {
       await AsyncStorage.setItem("vyweed_settings", JSON.stringify(settings)).catch(() => {});
     }
