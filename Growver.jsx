@@ -173,14 +173,14 @@ function Suggestions({ onSelect }) {
 }
 
 // ── Status dot ────────────────────────────────────────────────────────────────
-function StatusDot({ status, visionAvailable, onPress }) {
+function StatusDot({ status, visionModel, onPress }) {
   const color = status === "online" ? C.green : status === "offline" ? C.red : C.amber;
   const label = status === "online" ? "ONLINE" : status === "offline" ? "OFFLINE" : "...";
   return (
     <TouchableOpacity onPress={onPress} style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
       <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: color }} />
       <Text style={{ color, fontFamily: MONO, fontSize: 10, letterSpacing: 0.5 }}>{label}</Text>
-      {visionAvailable && (
+      {visionModel && (
         <View style={{
           backgroundColor: C.greenFaint, borderRadius: 4,
           paddingHorizontal: 5, paddingVertical: 1,
@@ -199,7 +199,7 @@ export default function Growver() {
   const [input, setInput]               = useState("");
   const [loading, setLoading]           = useState(false);
   const [status, setStatus]             = useState(null);
-  const [visionAvailable, setVision]    = useState(false);
+  const [visionModel, setVisionModel]   = useState(null); // name of available Ollama vision model
   const [model, setModel]               = useState("llama3.2");
   const [pendingImage, setPendingImage] = useState(null); // { uri, base64, mediaType }
   const flatListRef                     = useRef(null);
@@ -214,7 +214,7 @@ export default function Growver() {
       const r    = await fetchWithTimeout(`${API_BASE_URL}/api/v1/growver/status`, {}, 6000);
       const data = await r.json();
       setStatus(data.online ? "online" : "offline");
-      setVision(!!data.vision);
+      setVisionModel(data.vision_model || null);
       if (data.models?.length) setModel(data.models[0]);
     } catch {
       setStatus("offline");
@@ -295,6 +295,7 @@ export default function Growver() {
               image_base64: imageToSend.base64,
               media_type:   imageToSend.mediaType,
               message:      trimmed || undefined,
+              model:        visionModel || "llava",
             }),
           },
           60_000,
@@ -375,7 +376,7 @@ export default function Growver() {
         </View>
 
         <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-          <StatusDot status={status} visionAvailable={visionAvailable} onPress={checkStatus} />
+          <StatusDot status={status} visionModel={visionModel} onPress={checkStatus} />
           {messages.length > 0 && (
             <TouchableOpacity onPress={clearChat}>
               <Text style={{ color: C.grey, fontFamily: MONO, fontSize: 11 }}>NEW CHAT</Text>
@@ -385,7 +386,7 @@ export default function Growver() {
       </View>
 
       {/* ── Offline banner ── */}
-      {status === "offline" && !visionAvailable && (
+      {status === "offline" && (
         <View style={{
           backgroundColor: "#2a0a0a", borderBottomWidth: 1, borderColor: "#5a1a1a",
           paddingHorizontal: 14, paddingVertical: 8,
