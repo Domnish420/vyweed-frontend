@@ -7,7 +7,8 @@ import {
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { API_BASE_URL } from "./apiConfig";
+import { getApiBaseUrl } from "./apiConfig";
+const API_BASE_URL = { toString: () => getApiBaseUrl() };
 
 // ── Palette ───────────────────────────────────────────────────────────────────
 const C = {

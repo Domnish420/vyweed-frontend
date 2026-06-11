@@ -32,7 +32,8 @@ import {
 const { width: SW } = Dimensions.get("window");
 
 // ── Config ────────────────────────────────────────────────────────────────────
-import { API_V1 as API_BASE, BACKEND_HEADERS } from "./apiConfig";
+import { getApiV1, BACKEND_HEADERS } from "./apiConfig";
+const API_BASE = { toString: () => getApiV1() };
 
 // ── Palette ───────────────────────────────────────────────────────────────────
 const C = {

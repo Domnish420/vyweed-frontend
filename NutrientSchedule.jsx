@@ -17,7 +17,8 @@ import {
   ActivityIndicator, Modal, Platform, Alert,
 } from "react-native";
 
-import { API_V1 as API_BASE, BACKEND_HEADERS } from "./apiConfig";
+import { getApiV1, BACKEND_HEADERS } from "./apiConfig";
+const API_BASE = { toString: () => getApiV1() };
 
 const C = {
   bg:         "#070a07",

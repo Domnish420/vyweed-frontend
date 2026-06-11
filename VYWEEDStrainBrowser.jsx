@@ -32,7 +32,9 @@ import { useAppMode } from "./AppMode";
 const { width: SW, height: SH } = Dimensions.get("window");
 
 // ── Config ────────────────────────────────────────────────────────────────────
-import { API_V1 as API_BASE } from "./apiConfig";
+import { getApiV1, BACKEND_HEADERS } from "./apiConfig";
+const API_BASE = { toString: () => getApiV1() };
+// All `${API_BASE}` usages will now call getApiV1() at interpolation time.
 
 // ── Palette — same as grow tracker for cohesion ───────────────────────────────
 const C = {

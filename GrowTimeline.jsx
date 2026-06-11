@@ -19,7 +19,8 @@ import {
 import Svg, { Line, Polyline, Circle, Rect, Text as SvgText } from "react-native-svg";
 
 const { width: SW } = Dimensions.get("window");
-import { API_V1 as API_BASE, BACKEND_HEADERS } from "./apiConfig";
+import { getApiV1, BACKEND_HEADERS } from "./apiConfig";
+const API_BASE = { toString: () => getApiV1() };
 
 const C = {
   bg:         "#070a07",

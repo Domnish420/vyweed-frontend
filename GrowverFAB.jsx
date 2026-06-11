@@ -8,7 +8,8 @@ import {
   Dimensions, StyleSheet,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { API_BASE_URL } from "./apiConfig";
+import { getApiBaseUrl } from "./apiConfig";
+const API_BASE_URL = { toString: () => getApiBaseUrl() };
 
 const { height: SH } = Dimensions.get("window");
 const PANEL_H = SH * 0.62;

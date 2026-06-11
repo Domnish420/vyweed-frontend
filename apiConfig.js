@@ -3,11 +3,6 @@ import { NativeModules } from 'react-native';
 
 const extra = Constants.expoConfig?.extra ?? {};
 
-// In Expo Go dev builds, the JavaScript bundle is served from Metro at the PC's
-// LAN IP. SourceCode.scriptURL looks like "http://192.168.x.x:8081/index.bundle".
-// We extract that IP and assume the backend is on the same machine at port 8000.
-// EAS-built APKs always have apiBaseUrl set via environment secret so this
-// path is never reached in production.
 function resolveApiBaseUrl() {
   if (extra.apiBaseUrl) return extra.apiBaseUrl;
 
@@ -34,24 +29,24 @@ function resolveApiBaseUrl() {
   return 'http://localhost:8000';
 }
 
-export const API_BASE_URL = resolveApiBaseUrl();
-export const API_V1       = `${API_BASE_URL}/api/v1`;
+// Mutable — App.js overwrites this on startup from AsyncStorage (Settings).
+let _baseUrl = resolveApiBaseUrl();
+
+export const getApiBaseUrl = () => _baseUrl;
+export const getApiV1     = () => `${_baseUrl}/api/v1`;
+
+// Called once from App.js after reading vyweed_settings from AsyncStorage.
+// Strips any trailing /api/v1 so the value is always a bare base URL.
+export function setApiBaseUrl(url) {
+  if (!url) return;
+  _baseUrl = url.replace(/\/api\/v1\/?$/, '').replace(/\/$/, '');
+}
 
 // Bypasses ngrok's browser interstitial page on free-tier tunnels.
-// Harmless when using a direct IP or real domain.
 export const BACKEND_HEADERS = { 'ngrok-skip-browser-warning': 'true' };
 
-export const ENDPOINTS = {
-  strains:       `${API_BASE_URL}/strains`,
-  search:        `${API_BASE_URL}/search`,
-  grows:         `${API_BASE_URL}/grows`,
-  dailyReport:   `${API_BASE_URL}/daily-report`,
-  vpd:           `${API_BASE_URL}/vpd`,
-  diagnose:      `${API_BASE_URL}/diagnose`,
-  nutrients:     `${API_BASE_URL}/nutrients`,
-  photos:        `${API_BASE_URL}/photos`,
-  growverChat:   `${API_BASE_URL}/api/v1/growver/chat`,
-  growverStatus: `${API_BASE_URL}/api/v1/growver/status`,
-};
+// Legacy constants kept for any code not yet migrated to the getters.
+export const API_BASE_URL = _baseUrl;
+export const API_V1       = `${_baseUrl}/api/v1`;
 
 export default API_BASE_URL;

@@ -18,7 +18,9 @@ import {
   View, Text, TouchableOpacity, Platform, StatusBar,
   Dimensions, Animated,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { setApiBaseUrl } from "./apiConfig";
 
 import VYWEEDStrainBrowser from "./VYWEEDStrainBrowser";
 import VYWEEDGrowTracker   from "./VYWEEDGrowTracker";
@@ -242,6 +244,28 @@ function AppInner() {
 }
 
 export default function App() {
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    AsyncStorage.getItem("vyweed_settings")
+      .then(json => {
+        if (json) {
+          const s = JSON.parse(json);
+          if (s?.api_url) setApiBaseUrl(s.api_url);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setReady(true));
+  }, []);
+
+  if (!ready) return (
+    <View style={{ flex: 1, backgroundColor: "#070a07", alignItems: "center", justifyContent: "center" }}>
+      <Text style={{ color: "#39ff45", fontFamily: Platform.select({ ios: "Courier New", android: "monospace" }), fontSize: 12 }}>
+        VYWEED
+      </Text>
+    </View>
+  );
+
   return (
     <AppModeProvider>
       <AppInner />
