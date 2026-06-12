@@ -561,18 +561,22 @@ export default function VirtualGrow() {
   const [loading, setLoading]       = useState(true);
   const [day, setDay]               = useState(1);
   const [trophies, setTrophies]     = useState([]);
+  const [tokens, setTokens]         = useState(0);
   const [showShelve, setShowShelve] = useState(false);
   const [alreadyShelved, setAlreadyShelved] = useState(false);
   const [timerRemaining, setTimerRemaining] = useState(0);
   const [timerActive, setTimerActive]       = useState(false);
   const timerRef      = useRef(null);
-  const strainsPoolRef = useRef([]);   // holds loaded strains for instant re-rolls
+  const strainsPoolRef = useRef([]);
   const { isIRL } = useAppMode();
   const fadeAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     AsyncStorage.getItem("vyweed_trophies")
       .then(raw => { if (raw) setTrophies(JSON.parse(raw)); })
+      .catch(() => {});
+    AsyncStorage.getItem("vyweed_tokens")
+      .then(raw => { if (raw) setTokens(parseInt(raw, 10) || 0); })
       .catch(() => {});
   }, []);
 
@@ -740,6 +744,21 @@ export default function VirtualGrow() {
     await AsyncStorage.setItem("vyweed_trophies", JSON.stringify(updated)).catch(() => {});
   };
 
+  const earnToken = async (count = 1) => {
+    const n = tokens + count;
+    setTokens(n);
+    await AsyncStorage.setItem("vyweed_tokens", String(n)).catch(() => {});
+  };
+
+  // Returns true if a token was successfully spent
+  const spendToken = async () => {
+    if (tokens <= 0) return false;
+    const n = tokens - 1;
+    setTokens(n);
+    await AsyncStorage.setItem("vyweed_tokens", String(n)).catch(() => {});
+    return true;
+  };
+
   // ── Greenhouse mode — render RTLGrow with shared header ──────────────────────
   if (view === "greenhouse" && screen !== "collection") {
     return (
@@ -758,16 +777,25 @@ export default function VirtualGrow() {
                 GREENHOUSE
               </Text>
             </View>
-            <TouchableOpacity onPress={() => setScreen("collection")} style={{ alignItems: "center" }}>
-              <Text style={{ fontSize: 22 }}>🏆</Text>
-              <Text style={{ color: C.amber, fontFamily: HEADING, fontSize: 18, lineHeight: 20 }}>
-                {trophies.length}
-              </Text>
-            </TouchableOpacity>
+            <View style={{ flexDirection: "row", gap: 12, alignItems: "center" }}>
+              {/* Token badge */}
+              <View style={{ alignItems: "center" }}>
+                <Text style={{ fontSize: 18 }}>🎟</Text>
+                <Text style={{ color: C.green, fontFamily: HEADING, fontSize: 16, lineHeight: 18 }}>
+                  {tokens}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setScreen("collection")} style={{ alignItems: "center" }}>
+                <Text style={{ fontSize: 22 }}>🏆</Text>
+                <Text style={{ color: C.amber, fontFamily: HEADING, fontSize: 18, lineHeight: 20 }}>
+                  {trophies.length}
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
           <ViewModeToggle view={view} setView={setView} />
         </View>
-        <RTLGrow trophies={trophies} onAddTrophy={addTrophy} />
+        <RTLGrow trophies={trophies} onAddTrophy={addTrophy} tokens={tokens} onEarnToken={earnToken} />
       </View>
     );
   }
@@ -850,6 +878,8 @@ export default function VirtualGrow() {
           {/* Token skip */}
           <TouchableOpacity
             onPress={async () => {
+              const spent = await spendToken();
+              if (!spent) { Alert.alert("No Tokens", "Check in on your greenhouse daily to earn tokens."); return; }
               await skipTimer();
               setTimerActive(false);
               setTimerRemaining(0);
@@ -857,15 +887,17 @@ export default function VirtualGrow() {
               loadNextStrain();
             }}
             style={{
-              width: "100%", backgroundColor: C.greenFaint,
-              borderRadius: 14, borderWidth: 1, borderColor: C.greenDim,
+              width: "100%",
+              backgroundColor: tokens > 0 ? C.greenFaint : "rgba(255,255,255,0.02)",
+              borderRadius: 14, borderWidth: 1,
+              borderColor: tokens > 0 ? C.greenDim : C.border,
               padding: 18, alignItems: "center", marginBottom: 28,
             }}>
-            <Text style={{ color: C.green, fontFamily: HEADING, fontSize: 22, letterSpacing: 1 }}>
+            <Text style={{ color: tokens > 0 ? C.green : C.grey, fontFamily: HEADING, fontSize: 22, letterSpacing: 1 }}>
               🎟  USE TOKEN — SKIP ENTIRELY
             </Text>
-            <Text style={{ color: C.greenDim, fontFamily: SANS, fontSize: 12, marginTop: 3 }}>
-              Saves {formatSeconds(timerRemaining)}
+            <Text style={{ color: tokens > 0 ? C.greenDim : C.grey, fontFamily: SANS, fontSize: 12, marginTop: 3 }}>
+              {tokens > 0 ? `${tokens} token${tokens !== 1 ? "s" : ""} available · saves ${formatSeconds(timerRemaining)}` : "No tokens — earn by caring for your greenhouse plant"}
             </Text>
           </TouchableOpacity>
 
@@ -1003,12 +1035,20 @@ export default function VirtualGrow() {
               {isIRL ? "GROW REFERENCE" : timerActive && timerRemaining > 0 ? "NEXT PULL LOADING..." : "GACHA GROW"}
             </Text>
           </View>
-          <TouchableOpacity onPress={() => setScreen("collection")} style={{ alignItems: "center" }}>
-            <Text style={{ fontSize: 22 }}>🏆</Text>
-            <Text style={{ color: C.amber, fontFamily: HEADING, fontSize: 18, lineHeight: 20 }}>
-              {trophies.length}
-            </Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: "row", gap: 12, alignItems: "center" }}>
+            <View style={{ alignItems: "center" }}>
+              <Text style={{ fontSize: 18 }}>🎟</Text>
+              <Text style={{ color: C.green, fontFamily: HEADING, fontSize: 16, lineHeight: 18 }}>
+                {tokens}
+              </Text>
+            </View>
+            <TouchableOpacity onPress={() => setScreen("collection")} style={{ alignItems: "center" }}>
+              <Text style={{ fontSize: 22 }}>🏆</Text>
+              <Text style={{ color: C.amber, fontFamily: HEADING, fontSize: 18, lineHeight: 20 }}>
+                {trophies.length}
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Strain name + metallic tier badge */}
@@ -1076,6 +1116,8 @@ export default function VirtualGrow() {
               loadNextStrain();
             }}
             onSkipToken={async () => {
+              const spent = await spendToken();
+              if (!spent) { Alert.alert("No Tokens", "Check in on your greenhouse daily to earn tokens."); return; }
               await skipTimer();
               setTimerActive(false);
               setTimerRemaining(0);

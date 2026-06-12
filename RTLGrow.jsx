@@ -171,6 +171,20 @@ function formatCountdown(ms) {
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
 
+// Weekly reward gacha — better odds than normal gacha (T4: 40%, T1: 15%)
+const WEEK_REWARD_WEIGHTS = { T1: 15, T2: 10, T3: 35, T4: 40 };
+const TIER_TO_METAL = { T1: "diamond", T2: "gold", T3: "silver", T4: "bronze" };
+
+function rollWeekTier() {
+  const total = Object.values(WEEK_REWARD_WEIGHTS).reduce((a, b) => a + b, 0);
+  let roll = Math.random() * total;
+  for (const [tier, w] of Object.entries(WEEK_REWARD_WEIGHTS)) {
+    roll -= w;
+    if (roll <= 0) return tier;
+  }
+  return "T4";
+}
+
 // ── Strain Picker Modal ───────────────────────────────────────────────────────
 function StrainPickerModal({ visible, onClose, onSelect }) {
   const [query, setQuery]       = useState("");
@@ -368,13 +382,95 @@ function HarvestModal({ strain, metal, visible, onPlantAgain }) {
   );
 }
 
+// ── Weekly reward reveal modal ────────────────────────────────────────────────
+function WeekRewardModal({ visible, week, strain, metal, onClose }) {
+  if (!visible || !strain) return null;
+  const m = METALS[metal] || METALS.bronze;
+  const odds = WEEK_REWARD_WEIGHTS[strain.tier] ?? WEEK_REWARD_WEIGHTS.T4;
+
+  return (
+    <Modal visible={visible} transparent animationType="fade">
+      <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.95)", alignItems: "center", justifyContent: "center", padding: 32 }}>
+        <Text style={{ color: C.green, fontFamily: SANS_MED, fontSize: 11, letterSpacing: 3, marginBottom: 8 }}>
+          WEEK {week} COMPLETE
+        </Text>
+        <Text style={{ color: C.green, fontFamily: HEADING, fontSize: 34, letterSpacing: 3, textAlign: "center" }}>
+          BONUS STRAIN UNLOCKED
+        </Text>
+
+        {/* Tier reveal dome */}
+        <View style={{
+          marginTop: 28, marginBottom: 20,
+          width: 180, height: 180, borderRadius: 90,
+          backgroundColor: `${m.colour}10`,
+          borderWidth: 2, borderColor: `${m.colour}50`,
+          alignItems: "center", justifyContent: "center",
+        }}>
+          <Text style={{ fontSize: 50 }}>{m.icon}</Text>
+          <Text style={{ color: m.colour, fontFamily: HEADING, fontSize: 20, letterSpacing: 2, marginTop: 6 }}>
+            {m.label.toUpperCase()}
+          </Text>
+          <Text style={{ color: `${m.colour}80`, fontFamily: SANS, fontSize: 10, marginTop: 2 }}>
+            {m.rarity}
+          </Text>
+        </View>
+
+        <Text style={{ color: C.white, fontFamily: HEADING, fontSize: 26, textAlign: "center", letterSpacing: 1 }}>
+          {strain.name}
+        </Text>
+        <Text style={{ color: C.grey, fontFamily: SANS, fontSize: 11, marginTop: 6 }}>
+          {strain.tier} · THC {strain.thc_max}% · {strain.flower_wk_max}wk
+        </Text>
+
+        {/* Odds reminder */}
+        <View style={{
+          marginTop: 20, flexDirection: "row", gap: 6,
+          backgroundColor: C.card, borderRadius: 10,
+          borderWidth: 1, borderColor: C.border, padding: 12,
+        }}>
+          {Object.entries(WEEK_REWARD_WEIGHTS).reverse().map(([tier, pct]) => (
+            <View key={tier} style={{ alignItems: "center", flex: 1 }}>
+              <Text style={{ color: METALS[TIER_TO_METAL[tier]].colour, fontFamily: HEADING, fontSize: 14 }}>
+                {pct}%
+              </Text>
+              <Text style={{ color: C.grey, fontFamily: SANS, fontSize: 8, marginTop: 1 }}>{tier}</Text>
+            </View>
+          ))}
+        </View>
+
+        <Text style={{ color: C.greyLight, fontFamily: SANS, fontSize: 12, marginTop: 14, textAlign: "center", lineHeight: 18 }}>
+          Trophy added to your collection.{"\n"}Keep growing to earn more.
+        </Text>
+
+        <TouchableOpacity
+          onPress={onClose}
+          style={{
+            marginTop: 24, width: "100%",
+            backgroundColor: C.greenFaint,
+            borderRadius: 14, borderWidth: 1, borderColor: C.greenDim,
+            paddingVertical: 16, alignItems: "center",
+          }}>
+          <Text style={{ color: C.green, fontFamily: HEADING, fontSize: 22, letterSpacing: 2 }}>
+            BACK TO GROW →
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </Modal>
+  );
+}
+
 // ── Main RTLGrow component ────────────────────────────────────────────────────
-export default function RTLGrow({ trophies, onAddTrophy }) {
+export default function RTLGrow({ trophies, onAddTrophy, tokens, onEarnToken }) {
   const [growData, setGrowData]       = useState(null);
   const [loadingGrow, setLoadingGrow] = useState(true);
   const [now, setNow]                 = useState(Date.now());
-  const [pickerVisible, setPickerVisible]   = useState(false);
+  const [pickerVisible, setPickerVisible]           = useState(false);
   const [harvestModalVisible, setHarvestModalVisible] = useState(false);
+  const [weekRewardVisible, setWeekRewardVisible]   = useState(false);
+  const [weekRewardStrain, setWeekRewardStrain]     = useState(null);
+  const [weekRewardMetal, setWeekRewardMetal]       = useState(null);
+  const [weekRewardNum, setWeekRewardNum]           = useState(null);
+  const [weekRewardLoading, setWeekRewardLoading]   = useState(false);
 
   // Load persisted grow on mount
   useEffect(() => {
@@ -402,6 +498,17 @@ export default function RTLGrow({ trophies, onAddTrophy }) {
   const alreadyHarvested = Boolean(growData?.harvestedAt);
   const msIntoDay      = growData ? (now - growData.startedAt) % MS_PER_GROW_DAY : 0;
   const msToNextDay    = MS_PER_GROW_DAY - msIntoDay;
+
+  // Daily care claim — one token per real calendar day
+  const today           = new Date().toISOString().slice(0, 10);
+  const canClaimDaily   = Boolean(growData && !growData.harvestedAt && growData.lastDailyClaim !== today);
+
+  // Weekly milestone — every 7 grow days unlocks a bonus strain pull
+  const completedWeeks  = Math.floor(currentDay / 7);
+  const weeksClaimed    = growData?.weeksClaimed || [];
+  const nextUnclaimedWeek = Array.from({ length: completedWeeks }, (_, i) => i + 1)
+    .find(w => !weeksClaimed.includes(w));
+  const hasWeekReward   = nextUnclaimedWeek !== undefined && !growData?.harvestedAt;
 
   // Sync Growver context whenever day/stage changes
   useEffect(() => {
@@ -460,7 +567,58 @@ export default function RTLGrow({ trophies, onAddTrophy }) {
     setHarvestModalVisible(false);
     setGrowData(null);
     await AsyncStorage.removeItem(RTL_STORAGE_KEY).catch(() => {});
-    setPickerVisible(true); // open picker immediately
+    setPickerVisible(true);
+  };
+
+  const claimDaily = async () => {
+    if (!canClaimDaily) return;
+    const updated = { ...growData, lastDailyClaim: today };
+    setGrowData(updated);
+    await AsyncStorage.setItem(RTL_STORAGE_KEY, JSON.stringify(updated)).catch(() => {});
+    await onEarnToken(1);
+  };
+
+  const claimWeekReward = async () => {
+    if (!hasWeekReward || weekRewardLoading) return;
+    setWeekRewardLoading(true);
+    try {
+      const rolledTier  = rollWeekTier();
+      const rolledMetal = TIER_TO_METAL[rolledTier];
+
+      // Fetch random page and pick a strain matching the rolled tier
+      const page = Math.floor(Math.random() * TOTAL_PAGES) + 1;
+      const r    = await cachedFetch(`${API_BASE}/search?per_page=100&page=${page}&sort=name`);
+      const all  = r.data?.results || [];
+      const pool = all.filter(s => s.tier === rolledTier);
+      const strain = pool.length > 0
+        ? pool[Math.floor(Math.random() * pool.length)]
+        : all[Math.floor(Math.random() * all.length)];
+
+      if (!strain) return;
+
+      await onAddTrophy({
+        strainId:   strain.id,
+        strainName: strain.name,
+        tier:       rolledTier,
+        metal:      rolledMetal,
+        date:       today,
+        earnedAt:   Date.now(),
+        source:     "greenhouse_weekly",
+        weekNumber: nextUnclaimedWeek,
+      });
+
+      const updatedWeeks = [...weeksClaimed, nextUnclaimedWeek];
+      const updated = { ...growData, weeksClaimed: updatedWeeks };
+      setGrowData(updated);
+      await AsyncStorage.setItem(RTL_STORAGE_KEY, JSON.stringify(updated)).catch(() => {});
+
+      setWeekRewardStrain(strain);
+      setWeekRewardMetal(rolledMetal);
+      setWeekRewardNum(nextUnclaimedWeek);
+      setWeekRewardVisible(true);
+    } catch {} finally {
+      setWeekRewardLoading(false);
+    }
   };
 
   // ── Loading ──
@@ -575,6 +733,14 @@ export default function RTLGrow({ trophies, onAddTrophy }) {
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
       {/* Harvest celebration modal */}
+      <WeekRewardModal
+        visible={weekRewardVisible}
+        week={weekRewardNum}
+        strain={weekRewardStrain}
+        metal={weekRewardMetal}
+        onClose={() => setWeekRewardVisible(false)}
+      />
+
       <HarvestModal
         strain={growData?.strainData}
         metal={metal}
@@ -598,17 +764,27 @@ export default function RTLGrow({ trophies, onAddTrophy }) {
         }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
             <Text style={{ fontSize: 14 }}>{m.icon}</Text>
-            <Text style={{ color: m.colour, fontFamily: HEADING, fontSize: 26, flex: 1, letterSpacing: 1 }}>
+            <Text style={{ color: m.colour, fontFamily: HEADING, fontSize: 24, flex: 1, letterSpacing: 1 }}>
               {growData.strainData.name}
             </Text>
             <View style={{
               backgroundColor: `${m.colour}18`,
               borderRadius: 20, borderWidth: 1, borderColor: `${m.colour}60`,
-              paddingHorizontal: 10, paddingVertical: 4,
+              paddingHorizontal: 8, paddingVertical: 4,
             }}>
-              <Text style={{ color: m.colour, fontFamily: SANS_BOLD, fontSize: 9, letterSpacing: 1.5 }}>
+              <Text style={{ color: m.colour, fontFamily: SANS_BOLD, fontSize: 8, letterSpacing: 1.5 }}>
                 GREENHOUSE
               </Text>
+            </View>
+            {/* Token count badge */}
+            <View style={{
+              backgroundColor: "rgba(61,255,160,0.08)",
+              borderRadius: 20, borderWidth: 1, borderColor: "rgba(61,255,160,0.30)",
+              paddingHorizontal: 8, paddingVertical: 4,
+              flexDirection: "row", alignItems: "center", gap: 3,
+            }}>
+              <Text style={{ color: C.green, fontFamily: HEADING, fontSize: 13 }}>{tokens ?? 0}</Text>
+              <Text style={{ fontSize: 11 }}>🎟</Text>
             </View>
           </View>
         </View>
@@ -674,6 +850,61 @@ export default function RTLGrow({ trophies, onAddTrophy }) {
             {isHarvest ? "🌿 HARVEST READY" : "🏡 REAL-TIME GROW"}
           </Text>
         </View>
+
+        {/* ── Weekly reward banner ─── */}
+        {hasWeekReward && (
+          <TouchableOpacity
+            onPress={claimWeekReward}
+            disabled={weekRewardLoading}
+            style={{
+              marginHorizontal: 16, marginBottom: 10,
+              backgroundColor: "rgba(255,215,0,0.08)",
+              borderRadius: 14, borderWidth: 1.5, borderColor: "rgba(255,215,0,0.50)",
+              padding: 16, flexDirection: "row", alignItems: "center", gap: 12,
+            }}>
+            <Text style={{ fontSize: 28 }}>🎁</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: "#ffd700", fontFamily: HEADING, fontSize: 18, letterSpacing: 1 }}>
+                WEEK {nextUnclaimedWeek} REWARD
+              </Text>
+              <Text style={{ color: "rgba(255,215,0,0.65)", fontFamily: SANS, fontSize: 11, marginTop: 2 }}>
+                Bonus strain unlock — T1: 15% · T2: 10% · T3: 35% · T4: 40%
+              </Text>
+            </View>
+            <Text style={{ color: "#ffd700", fontFamily: HEADING, fontSize: 20 }}>
+              {weekRewardLoading ? "…" : "ROLL"}
+            </Text>
+          </TouchableOpacity>
+        )}
+
+        {/* ── Daily care claim ─── */}
+        {canClaimDaily && (
+          <TouchableOpacity
+            onPress={claimDaily}
+            style={{
+              marginHorizontal: 16, marginBottom: 10,
+              backgroundColor: C.greenFaint,
+              borderRadius: 14, borderWidth: 1, borderColor: C.greenDim,
+              padding: 14, flexDirection: "row", alignItems: "center", gap: 12,
+            }}>
+            <Text style={{ fontSize: 24 }}>🌟</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: C.green, fontFamily: HEADING, fontSize: 16, letterSpacing: 1 }}>
+                DAILY CARE
+              </Text>
+              <Text style={{ color: C.greenDim, fontFamily: SANS, fontSize: 11, marginTop: 1 }}>
+                You checked in today — claim your token
+              </Text>
+            </View>
+            <View style={{
+              backgroundColor: "rgba(61,255,160,0.15)",
+              borderRadius: 10, borderWidth: 1, borderColor: C.greenDim,
+              paddingHorizontal: 10, paddingVertical: 6,
+            }}>
+              <Text style={{ color: C.green, fontFamily: HEADING, fontSize: 16 }}>+1 🎟</Text>
+            </View>
+          </TouchableOpacity>
+        )}
 
         {/* ── Harvest button ─── */}
         {isHarvest && !alreadyHarvested && (
