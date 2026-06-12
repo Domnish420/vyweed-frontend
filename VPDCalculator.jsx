@@ -1,8 +1,8 @@
 /**
  * VPDCalculator.jsx
- * Real-time VPD calculator + interactive scenario simulator.
+ * Real-time VPD calculator + VPD Hazard Simulator.
  * CALC tab — live VPD readout with +/- controls.
- * SIMULATE tab — interactive plant simulator with health model + day log.
+ * SIMULATE tab — 3-phase grow simulator with Growver narration.
  */
 
 import React, { useState, useMemo, useEffect } from "react";
@@ -81,144 +81,124 @@ function calcTempFactor(t) {
   if (t <= 34) return 0.35;
   return 0.12;
 }
-const NUTRIENT_FACTOR = { low: 0.68, med: 1.00, high: 0.80, toxic: 0.28 };
-const WATER_FACTOR    = { dry: 0.48, ok: 1.00, over: 0.62 };
 
-function calcDayHealth(temp, rh, stage, nutrients, water) {
+function calcDayHealth(temp, rh, stageKey) {
   const vpd = calcVPD(temp, rh);
-  return calcVpdFactor(vpd, stage)
-    * calcTempFactor(temp)
-    * (NUTRIENT_FACTOR[nutrients] ?? 1)
-    * (WATER_FACTOR[water] ?? 1);
+  const vpds = SIM_STAGES.find(s => s.key === stageKey)?.vpds || "Vegetative";
+  return calcVpdFactor(vpd, vpds) * calcTempFactor(temp);
 }
 
-function getSymptoms(health, temp, vpd, stage, nutrients, water) {
-  const t = STAGE_TARGETS[stage] || STAGE_TARGETS.Vegetative;
-  const s = [];
-  if (vpd < t.lo * 0.5)    s.push("Stomata closed — zero nutrient transport");
-  else if (vpd < t.lo)     s.push("Low VPD — sluggish transpiration");
-  else if (vpd > 2.0)      s.push("Emergency shutdown — stomata sealed");
-  else if (vpd > t.hi * 1.3) s.push("VPD critical — severe leaf tacoing");
-  else if (vpd > t.hi)     s.push("VPD high — plant working overtime");
-  if (temp > 32)           s.push("Heat stress — bleaching + tip burn");
-  else if (temp > 29)      s.push("Warm stress — tip burn risk");
-  else if (temp < 16)      s.push("Cold stress — root zone stalled");
-  else if (temp < 18)      s.push("Cool temps — reduced metabolism");
-  if (nutrients === "toxic") s.push("Nute toxicity — burn across all leaves");
-  else if (nutrients === "high") s.push("Overfeeding — tip burn developing");
-  else if (nutrients === "low")  s.push("Underfeeding — pale interveinal chlorosis");
-  if (water === "dry")     s.push("Drought stress — wilting, stomata shut");
-  else if (water === "over") s.push("Overwatering — root hypoxia, yellowing");
-  if (health < 0.30)       s.push("Severe stress — growth fully halted");
-  else if (health < 0.55)  s.push("Moderate stress — yield impact certain");
-  if (s.length === 0)      s.push("Plant is healthy and thriving");
-  return s;
-}
+// ── Sim stages ────────────────────────────────────────────────────────────────
+const SIM_STAGES = [
+  { key: "seedling",      label: "SEEDLING",     dayRange: "Days 1–7",   rendStage: "Seedling",     vpds: "Seedling",     totalDays: 7  },
+  { key: "early_veg",    label: "EARLY VEG",    dayRange: "Days 8–21",  rendStage: "Vegetative",   vpds: "Vegetative",   totalDays: 14 },
+  { key: "late_veg",     label: "LATE VEG",     dayRange: "Days 22–35", rendStage: "Vegetative",   vpds: "Vegetative",   totalDays: 14 },
+  { key: "transition",   label: "TRANSITION",   dayRange: "Days 36–49", rendStage: "Transition",   vpds: "Pre-Flower",   totalDays: 14 },
+  { key: "early_flower", label: "EARLY FLOWER", dayRange: "Days 50–65", rendStage: "Early Flower", vpds: "Flowering",    totalDays: 16 },
+  { key: "mid_flower",   label: "MID FLOWER",   dayRange: "Days 66–77", rendStage: "Mid Flower",   vpds: "Flowering",    totalDays: 12 },
+  { key: "late_flower",  label: "LATE FLOWER",  dayRange: "Days 78–91", rendStage: "Late Flower",  vpds: "Late Flower",  totalDays: 14 },
+];
 
-function getPreventionTips(temp, vpd, stage, nutrients, water) {
-  const t = STAGE_TARGETS[stage] || STAGE_TARGETS.Vegetative;
-  const tips = [];
-  if (vpd > t.hi)          tips.push("Lower temp or raise RH to reduce VPD");
-  else if (vpd < t.lo)     tips.push("Raise temp or lower RH to increase VPD");
-  if (temp > 28)           tips.push(`Reduce temp to 24–26°C (you are ${(temp-26).toFixed(0)}°C over)`);
-  else if (temp < 18)      tips.push(`Raise temp to 20–26°C (you are ${(18-temp).toFixed(0)}°C under)`);
-  if (nutrients === "toxic") tips.push("Flush medium with plain pH water — 3× pot volume");
-  else if (nutrients === "high") tips.push("Reduce feed concentration by 25–30%");
-  else if (nutrients === "low")  tips.push("Step up feed — work toward full strength");
-  if (water === "dry")     tips.push("Water now — check medium every 12–24h");
-  else if (water === "over") tips.push("Let medium dry out — 30% weight loss before next water");
-  if (tips.length === 0)   tips.push("Conditions are optimal — maintain these parameters");
-  return tips;
-}
+// ── Hazards ───────────────────────────────────────────────────────────────────
+const SIM_HAZARDS = [
+  {
+    key: "HEAT_WAVE",
+    name: "HEAT WAVE", icon: "🔥",
+    temp: 34, rh: 35,
+    growver: "Your tent just crept past 34°C — the plant is shutting down to survive.",
+    cause: "Above 32°C, photosynthetic enzymes begin to break down. The plant closes stomata to prevent fatal water loss — all nutrient transport stops with them.",
+    effects: ["Leaves taco and curl upward within hours", "Tip burn appears — calcium can't move fast enough", "Terpenes volatilise in flower — potency and smell drop", "Root zone dries 3× faster — feeding becomes unreliable"],
+    fix: ["Raise lights by 10–15 cm immediately", "Direct an oscillating fan across the canopy", "Place frozen bottles in front of the intake duct", "Get below 28°C within 2 hours or damage compounds"],
+    severity: "high",
+  },
+  {
+    key: "COLD_SNAP",
+    name: "COLD SNAP", icon: "❄️",
+    temp: 14, rh: 86,
+    growver: "Temperature dropped to 14°C overnight — the plant just hit cold shock.",
+    cause: "Below 16°C, root enzyme activity stalls. Water and nutrient uptake nearly stop as root membranes lose permeability and the soil microbiome shuts down.",
+    effects: ["Purple/blue colouring on leaves and stems", "Nutrient deficiencies appear despite rich media — it's lockout, not deficiency", "Growth slows to near zero for 48–72 hours", "High humidity at low temp is a perfect mould incubator"],
+    fix: ["Check heater thermostat — replace if faulty", "Lower lights closer to provide radiant warmth", "Add a seedling heat mat under the pot", "Drop humidity to below 55% — cold + wet = botrytis"],
+    severity: "medium",
+  },
+  {
+    key: "HUMIDITY_CRISIS",
+    name: "HUMIDITY CRISIS", icon: "💧",
+    temp: 24, rh: 78,
+    growver: "RH hit 78% — you're incubating grey mould inside your buds right now.",
+    cause: "At 78% RH the VPD drops near zero. Bud interiors — where airflow can't reach — hit 85–90% humidity. Botrytis spores germinate in as little as 6 hours in these conditions.",
+    effects: ["Grey fuzzy mould appears inside dense bud sites first", "Infected buds spread spores to every neighbouring cola", "Cannot be reversed — only the spread can be slowed", "One infected plant can ruin an entire room"],
+    fix: ["Run dehumidifier on maximum — target below 50% RH", "Crank extraction to 100%", "Lollipop lower 30% of the plant to open canopy airflow", "Remove any infected buds immediately — every hour matters"],
+    severity: "critical",
+  },
+  {
+    key: "DARK_INTERRUPT",
+    name: "LIGHT LEAK", icon: "💡",
+    temp: 24, rh: 55,
+    growver: "A light leak broke the dark period — the plant's internal clock just reset.",
+    cause: "Cannabis flowering requires an uninterrupted dark period. Even one minute of light triggers phytochrome reversal — the plant receives a 'morning' signal and resets its hormone cycle.",
+    effects: ["Flowering reverts toward vegetative growth — 2–3 week setback", "Hermaphrodite risk spikes as stress triggers pollen sacs", "Irregular foxtailing bud structure on new growth", "Seeds in sinsemilla if pollen sacs open near flowering females"],
+    fix: ["Seal every light leak — use black-out tape and tent socks", "Verify timer is set correctly and functioning", "Do a midnight check inside your tent with all lights off", "If hermies appear, remove pollen sacs with tweezers before they open"],
+    severity: "high",
+  },
+  {
+    key: "OVERFEEDING",
+    name: "OVERFEEDING", icon: "☠️",
+    temp: 24, rh: 58,
+    growver: "EC is too high — you've over-salted the root zone.",
+    cause: "When dissolved salt concentration exceeds what's inside the roots, osmotic pressure reverses — water is drawn OUT of the roots. The plant starves while sitting in a rich medium.",
+    effects: ["Bright red-orange burn on all leaf tips simultaneously", "Older leaves show multiple deficiency signs — nothing absorbs", "Growth slows or stops completely", "Roots appear brown and slimy if you inspect"],
+    fix: ["Flush medium with 3× pot volume of plain pH'd water", "Target 0 EC runoff — check with a meter", "Wait 48h before resuming feed at 50% strength", "Work back up over 1 week maximum"],
+    severity: "high",
+  },
+  {
+    key: "ROOT_DROWN",
+    name: "OVERWATERING", icon: "🌊",
+    temp: 22, rh: 65,
+    growver: "The medium hasn't dried out. Roots are sitting waterlogged — anaerobic bacteria are moving in.",
+    cause: "Roots need oxygen. Waterlogged media drives out all air pockets. Anaerobic bacteria produce alcohol and acids that damage root tissue. The most common beginner mistake.",
+    effects: ["Leaves droop and look 'too healthy' then start yellowing", "Medium stays wet for 4+ days with no drying cycle", "Root rot colonises — roots go brown and smell of decay", "Plant appears deficient despite a rich medium"],
+    fix: ["Stop watering entirely — let medium reach 30% of its dry weight", "Lift the pot to judge water content by weight", "Improve drainage — check saucers aren't holding water", "Add 3ml/L of 3% H2O2 to next watering to oxygenate roots"],
+    severity: "medium",
+  },
+  {
+    key: "LATE_PUSH",
+    name: "LATE PUSH", icon: "💎",
+    temp: 27, rh: 44,
+    growver: "Intentional late-stage stress — pushing VPD high to trigger resin defence.",
+    cause: "In the final 1–2 weeks, elevated VPD (1.5–2.0 kPa) mimics dry season conditions. Cannabis responds by producing more trichomes as UV protection and moisture retention defence.",
+    effects: ["Resin production increases noticeably", "Terpene concentration and aroma intensify", "Some leaf yellowing and tacoing — acceptable at this stage", "Water demand increases — medium can dry in 12–18 hours"],
+    fix: ["Water more frequently — check medium twice daily", "Don't push above 2.0 kPa or 28°C — yields drop fast", "Only sustainable for 7–10 days maximum", "Watch for amber pistils to confirm harvest window is open"],
+    severity: "low",
+  },
+];
 
-function runSimulation(days, temp, rh, stage, nutrients, water) {
+// ── Sim engine ────────────────────────────────────────────────────────────────
+function computeGrow(baseTemp, baseRh, hazardSlots) {
   let health = 1.0;
-  const log = [];
-  for (let d = 1; d <= days; d++) {
-    const target = calcDayHealth(temp, rh, stage, nutrients, water);
-    health = health + (target - health) * 0.28;
-    health = Math.max(0.02, Math.min(1.0, health));
+  return SIM_STAGES.map(stage => {
+    const hazardKey = hazardSlots[stage.key];
+    const hazard    = hazardKey ? SIM_HAZARDS.find(h => h.key === hazardKey) : null;
+    const temp      = hazard ? hazard.temp : baseTemp;
+    const rh        = hazard ? hazard.rh   : baseRh;
+    const startH    = health;
+    for (let d = 0; d < stage.totalDays; d++) {
+      const target = calcDayHealth(temp, rh, stage.key);
+      health = health + (target - health) * 0.28;
+      health = Math.max(0.05, Math.min(1.0, health));
+    }
     const vpd = calcVPD(temp, rh);
-    log.push({
-      day: d,
-      health: Math.round(health * 100),
-      vpd: vpd.toFixed(2),
-      symptoms: getSymptoms(health, temp, vpd, stage, nutrients, water),
-    });
-  }
-  return log;
+    return { stage, hazard, startHealth: startH, endHealth: health, vpd };
+  });
 }
 
-// ── Scenario bank ─────────────────────────────────────────────────────────────
-const SCENARIOS = [
-  { name: "HEAT WAVE",       icon: "🔥", temp: 33, rh: 38, light: "12", nutrients: "med",   water: "dry",  desc: "AC fails — heat + drought combo" },
-  { name: "COLD SNAP",       icon: "❄️", temp: 16, rh: 84, light: "12", nutrients: "med",   water: "ok",   desc: "Heating cuts out overnight" },
-  { name: "HUMIDITY CRISIS", icon: "💧", temp: 24, rh: 78, light: "12", nutrients: "med",   water: "over", desc: "Dehumidifier fails in flower" },
-  { name: "PERFECT VEG",     icon: "🍃", temp: 24, rh: 62, light: "18", nutrients: "med",   water: "ok",   desc: "Dialled vegetative environment" },
-  { name: "PERFECT FLOWER",  icon: "🌺", temp: 26, rh: 50, light: "12", nutrients: "med",   water: "ok",   desc: "Optimal mid-flower conditions" },
-  { name: "LATE FLOWER",     icon: "💎", temp: 27, rh: 44, light: "12", nutrients: "low",   water: "ok",   desc: "Resin push — final 2 weeks" },
-  { name: "OVERFEEDING",     icon: "☠️", temp: 24, rh: 58, light: "18", nutrients: "toxic", water: "ok",   desc: "Nute toxicity — beginner trap" },
-  { name: "ROOT DROWN",      icon: "🌊", temp: 22, rh: 65, light: "18", nutrients: "med",   water: "over", desc: "Overwatering — anaerobic roots" },
-];
-
-// ── Plant state data per VPD band ─────────────────────────────────────────────
-const VPD_PLANT_STATES = [
-  {
-    range:        [0, 0.4],
-    stateLabel:   "STOMATA CLOSED",
-    colour:       C.blue,
-    transpiration:"Almost none — nutrient transport stalled",
-    summary:      "Air is nearly saturated. The plant has no vapour pressure gradient to drive transpiration. Stomata stay shut and the plant stops feeding.",
-    symptoms:     ["Zero visible growth", "Limp soft stems despite wet soil", "Condensation forming on leaves", "Grey mould appearing inside buds"],
-    risk:         "CRITICAL — botrytis (bud rot) can destroy your harvest within 48 hours",
-    riskColour:   C.red,
-    fix:          ["Run dehumidifier on max", "Crank extraction fan to full", "Add direct oscillating fans through canopy", "Remove any affected buds immediately — mould spreads fast"],
-  },
-  {
-    range:        [0.4, 0.8],
-    stateLabel:   "MINIMAL TRANSPIRATION",
-    colour:       "#88d8ff",
-    transpiration:"Low — only suitable for seedlings",
-    summary:      "Plant is barely breathing. Fine for seedlings whose roots are small, but vegetative and flowering plants need more vapour pressure to pull nutrients.",
-    symptoms:     ["Slow growth", "Slightly limp canopy", "Damp microclimate between dense leaves", "Early mould spots on older fan leaves"],
-    risk:         "Moderate — mould risk increases each day you stay here in veg/flower",
-    riskColour:   C.amber,
-    fix:          ["Lower humidity by 5–10%", "Raise temperature slightly", "Improve airflow through canopy", "Fine for seedlings — no action needed before week 2"],
-  },
-  {
-    range:        [0.8, 1.5],
-    stateLabel:   "ACTIVE TRANSPIRATION",
-    colour:       C.green,
-    transpiration:"Optimal — plant drawing nutrients efficiently",
-    summary:      "Stomata open, transpiration running at full capacity. The plant is actively pulling water and dissolved nutrients up from the roots. This is where growth happens.",
-    symptoms:     ["Turgid, upward-pointing leaves", "Visible new growth daily", "Good water uptake", "Strong internodal spacing"],
-    risk:         "Minimal — ideal range. Focus on light and nutrients.",
-    riskColour:   C.green,
-    fix:          ["Hold these conditions", "This is the sweet spot — any energy goes into nutrients and training"],
-  },
-  {
-    range:        [1.5, 2.0],
-    stateLabel:   "HEAVY TRANSPIRATION",
-    colour:       C.amber,
-    transpiration:"High — plant is working hard",
-    summary:      "Plant is under mild intentional stress. Higher VPD in late flower forces the plant to produce more resin as a defence mechanism. Only sustainable for the final 1–2 weeks.",
-    symptoms:     ["Leaf edges curling upward slightly (tacoing)", "Fast water uptake — check daily", "Buds thickening and becoming stickier", "Slight yellowing on oldest leaves (normal in late flower)"],
-    risk:         "Manageable — but only push this in the final 2 weeks of flower",
-    riskColour:   C.amber,
-    fix:          ["Water more frequently — roots must stay hydrated", "Don't push above 2.0 kPa", "Ensure strong airflow over buds", "Only sustainable for 7–14 days maximum"],
-  },
-  {
-    range:        [2.0, 99],
-    stateLabel:   "EMERGENCY SHUTDOWN",
-    colour:       C.red,
-    transpiration:"Zero — plant is protecting itself from death",
-    summary:      "Stomata have closed to prevent fatal water loss. All photosynthesis, nutrient uptake and growth have stopped. The plant is in survival mode.",
-    symptoms:     ["Leaves curling up tightly (taco-ing)", "Wilting despite wet soil (roots can't push fast enough)", "Bleached or pale patches near the light", "Rapid nutrient burn appearing on tips", "Complete growth halt"],
-    risk:         "SEVERE — significant yield loss is certain without immediate intervention",
-    riskColour:   C.red,
-    fix:          ["Lower temperature IMMEDIATELY — raise lights, add cooling", "Raise humidity 10–15% right now", "Check roots are not dehydrated (heat above 26°C dries medium fast)", "Remove lollipop lower growth to reduce plant's total transpiration load", "Do not feed until stress resolves"],
-  },
-];
+// ── Severity colour ───────────────────────────────────────────────────────────
+function severityColor(s) {
+  if (s === "critical") return C.red;
+  if (s === "high")     return "#ff7730";
+  if (s === "medium")   return C.amber;
+  return C.blue;
+}
 
 // ── Shared sub-components ─────────────────────────────────────────────────────
 function InfoBtn({ onPress }) {
@@ -295,30 +275,6 @@ function VPDGauge({ vpd, stage }) {
   );
 }
 
-// ── Pill selector ─────────────────────────────────────────────────────────────
-function PillSelector({ options, value, onChange }) {
-  return (
-    <View style={{ flexDirection: "row", gap: 6, flexWrap: "wrap" }}>
-      {options.map(opt => (
-        <TouchableOpacity
-          key={opt.value}
-          onPress={() => onChange(opt.value)}
-          style={{
-            paddingHorizontal: 12, paddingVertical: 7,
-            borderRadius: 6, borderWidth: 1,
-            backgroundColor: value === opt.value ? C.greenFaint : C.surface,
-            borderColor: value === opt.value ? C.green : C.border,
-          }}>
-          <Text style={{ fontFamily: MONO, fontSize: 11,
-            color: value === opt.value ? C.green : C.greyLight }}>
-            {opt.label}
-          </Text>
-        </TouchableOpacity>
-      ))}
-    </View>
-  );
-}
-
 // ── Info modal ────────────────────────────────────────────────────────────────
 const VPD_INFO = {
   title: "VPD CALCULATOR",
@@ -326,9 +282,9 @@ const VPD_INFO = {
   what: "VPD (Vapour Pressure Deficit) measures the difference between how much moisture the air is holding and how much it could hold. Plants use this gradient to decide how hard to breathe — too low and they stop, too high and they shut down.",
   sections: [
     { icon: "📐", title: "THE NUMBER (kPa)", text: "kPa = kilopascals. Think of it as how hard your plant is working. 0.4-0.8 for seedlings. 0.8-1.2 for veg. 1.0-1.5 for flower. 1.5-2.0 for the final 2 weeks of late flower only." },
-    { icon: "🌿", title: "SIMULATE TAB", text: "Set your environment (temp, RH, light, nutrients, water) and run a 7, 14 or 21-day simulation. The plant visual reflects accumulated stress. Day log shows per-day health, VPD, active symptoms and prevention tips." },
-    { icon: "🌸", title: "SCENARIO BANK", text: "Real-world crisis scenarios — heat waves, humidity spikes, cold snaps, overfeeding. Tap any card to pre-load all 5 condition variables, then hit a run button to simulate." },
-    { icon: "💧", title: "PLANT STATE CARD", text: "Below the grid, the plant state card updates live. Tap it to expand — shows transpiration status, visible symptoms, risk level, and a numbered fix list. This is your on-the-spot grow doctor." },
+    { icon: "🌿", title: "SIMULATE TAB", text: "Assign hazard events to any of 7 grow stages, then run a full season simulation. The plant visual updates each stage. Hazard cards show Growver narration, causes, effects, and fixes." },
+    { icon: "🔥", title: "HAZARD EVENTS", text: "Heat Wave, Cold Snap, Humidity Crisis, Light Leak, Overfeeding, Overwatering, Late Push. Each fires real environmental conditions and drags the plant's health across the entire stage." },
+    { icon: "💧", title: "PLANT STATE CARD", text: "The RESULTS screen shows a per-stage health timeline, final plant visual, and a summary of every hazard that fired and how much health it cost." },
   ],
   tip: "Change humidity first — it's easier than temperature. A dehumidifier, humidifier, or even a bowl of water can shift RH 5-15% faster than you can change air temp.",
 };
@@ -400,20 +356,20 @@ function VPDInfoModal({ visible, onClose }) {
 
 // ── Main screen ───────────────────────────────────────────────────────────────
 export default function VPDCalculator() {
-  const [temp,          setTemp]          = useState(24.0);
-  const [rh,            setRh]            = useState(55.0);
-  const [stage,         setStage]         = useState("Vegetative");
-  const [tab,           setTab]           = useState("calc");    // "calc" | "simulate"
-  const [showInfo,      setShowInfo]      = useState(false);
-  const [activeScenario, setActiveScenario] = useState(null);
+  const [temp,     setTemp]     = useState(24.0);
+  const [rh,       setRh]       = useState(55.0);
+  const [stage,    setStage]    = useState("Vegetative");
+  const [tab,      setTab]      = useState("calc");    // "calc" | "simulate"
+  const [showInfo, setShowInfo] = useState(false);
 
-  // Simulate tab state
-  const [simNutrients,  setSimNutrients]  = useState("med");   // "low"|"med"|"high"|"toxic"
-  const [simWater,      setSimWater]      = useState("ok");    // "dry"|"ok"|"over"
-  const [simLight,      setSimLight]      = useState("18");    // "18"|"12"
-  const [simLog,        setSimLog]        = useState([]);
-  const [simHealth,     setSimHealth]     = useState(100);
-  const [hasSimulated,  setHasSimulated]  = useState(false);
+  // Hazard simulator state
+  const [simPhase,         setSimPhase]         = useState("setup");   // "setup"|"playing"|"results"
+  const [hazardSlots,      setHazardSlots]      = useState({});        // { stageKey: hazardKey }
+  const [simLog,           setSimLog]           = useState([]);
+  const [simStageIdx,      setSimStageIdx]      = useState(0);
+  const [runCount,         setRunCount]         = useState(0);
+  const [freeChoice,       setFreeChoice]       = useState({});
+  const [pickingHazardFor, setPickingHazardFor] = useState(null);
 
   const vpd = useMemo(() => calcVPD(temp, rh), [temp, rh]);
   const { colour, label: statusLabel } = vpdStatus(vpd, stage);
@@ -452,15 +408,36 @@ export default function VPDCalculator() {
     return `LOWER TEMP to ${Math.round((temp - 1) * 2) / 2}°C  OR  RAISE RH to ${Math.round(rh + 5)}%`;
   }, [vpd, stage, temp, rh]);
 
-  function loadScenario(s) {
-    setTemp(s.temp);
-    setRh(s.rh);
-    setSimLight(s.light || "12");
-    setSimNutrients(s.nutrients || "med");
-    setSimWater(s.water || "ok");
-    setActiveScenario(s.name);
-    setSimLog([]);
-    setHasSimulated(false);
+  // ── Playback advance ──────────────────────────────────────────────────────
+  function advance(choice) {
+    if (runCount > 0 && choice) {
+      setFreeChoice(prev => ({ ...prev, [simLog[simStageIdx].stage.key]: choice }));
+    }
+    const next = simStageIdx + 1;
+    if (next >= simLog.length) {
+      setSimPhase("results");
+    } else {
+      setSimStageIdx(next);
+    }
+  }
+
+  const hasAnyHazard = Object.keys(hazardSlots).length > 0;
+
+  // ── Health bar color ──────────────────────────────────────────────────────
+  function healthColor(h) {
+    if (h >= 0.80) return C.green;
+    if (h >= 0.50) return C.amber;
+    return C.red;
+  }
+
+  // ── Health grade ──────────────────────────────────────────────────────────
+  function healthGrade(h) {
+    const pct = h * 100;
+    if (pct >= 80) return "A";
+    if (pct >= 65) return "B";
+    if (pct >= 50) return "C";
+    if (pct >= 35) return "D";
+    return "F";
   }
 
   return (
@@ -606,200 +583,498 @@ export default function VPDCalculator() {
       {tab === "simulate" && (
         <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 60 }}>
 
-          {/* A. Plant display + health bar */}
-          <View style={{ alignItems: "center", marginBottom: 8 }}>
-            <PlantRenderer
-              width={SW - 48}
-              height={200}
-              stage={stage}
-              stressLevel={hasSimulated ? (100 - simHealth) / 100 : 0}
-            />
-          </View>
-          <View style={{ marginBottom: 16 }}>
-            <View style={{ height: 8, backgroundColor: C.surface, borderRadius: 4,
-              overflow: "hidden", marginBottom: 6 }}>
-              {hasSimulated && (
-                <View style={{
-                  width: `${simHealth}%`, height: 8, borderRadius: 4,
-                  backgroundColor: simHealth >= 80 ? C.green : simHealth >= 55 ? C.amber : C.red,
-                }} />
-              )}
-            </View>
-            <Text style={{ fontFamily: MONO, fontSize: 12,
-              color: hasSimulated
-                ? (simHealth >= 80 ? C.green : simHealth >= 55 ? C.amber : C.red)
-                : C.greyLight,
-              textAlign: "center" }}>
-              {hasSimulated
-                ? `${simHealth}%  ${simHealth >= 80 ? "HEALTHY" : simHealth >= 55 ? "RECOVERING" : "STRESSED"}`
-                : "READY TO SIMULATE"}
-            </Text>
-          </View>
-
-          {/* B. Environment controls */}
-          <Label style={{ marginBottom: 12 }}>Environment</Label>
-          <NumInput label="TEMPERATURE" value={temp}
-            onChange={v => { setTemp(v); setActiveScenario(null); }}
-            unit="°C" min={10} max={40} step={0.5} />
-          <NumInput label="HUMIDITY" value={rh}
-            onChange={v => { setRh(v); setActiveScenario(null); }}
-            unit="%" min={20} max={95} step={1} />
-
-          {/* Live VPD readout */}
-          <View style={{ flexDirection: "row", alignItems: "center",
-            justifyContent: "space-between", marginBottom: 16 }}>
-            <Text style={{ fontFamily: MONO, fontSize: 11, color: C.greyLight }}>LIVE VPD</Text>
-            <Text style={{ fontFamily: MONO, fontSize: 18, fontWeight: "bold", color: colour }}>
-              {vpd.toFixed(2)} kPa — {statusLabel}
-            </Text>
-          </View>
-
-          <View style={{ marginBottom: 14 }}>
-            <Label style={{ marginBottom: 8 }}>Light cycle</Label>
-            <PillSelector
-              options={[
-                { value: "18", label: "18H  VEG" },
-                { value: "12", label: "12H  FLOWER" },
-              ]}
-              value={simLight}
-              onChange={setSimLight}
-            />
-          </View>
-
-          <View style={{ marginBottom: 14 }}>
-            <Label style={{ marginBottom: 8 }}>Nutrients</Label>
-            <PillSelector
-              options={[
-                { value: "low",   label: "LOW" },
-                { value: "med",   label: "MEDIUM" },
-                { value: "high",  label: "HIGH" },
-                { value: "toxic", label: "TOXIC ☠" },
-              ]}
-              value={simNutrients}
-              onChange={setSimNutrients}
-            />
-          </View>
-
-          <View style={{ marginBottom: 16 }}>
-            <Label style={{ marginBottom: 8 }}>Water</Label>
-            <PillSelector
-              options={[
-                { value: "dry",  label: "DRY" },
-                { value: "ok",   label: "CORRECT" },
-                { value: "over", label: "OVERWATERED" },
-              ]}
-              value={simWater}
-              onChange={setSimWater}
-            />
-          </View>
-
-          {/* C. Run buttons */}
-          <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
-            {[7, 14, 21].map(d => (
-              <TouchableOpacity key={d} onPress={() => {
-                const log = runSimulation(d, temp, rh, stage, simNutrients, simWater);
-                setSimLog(log);
-                setSimHealth(log[log.length - 1].health);
-                setHasSimulated(true);
-              }} style={{ flex: 1, paddingVertical: 12, backgroundColor: C.greenFaint,
-                borderRadius: 8, borderWidth: 1, borderColor: C.greenDim, alignItems: "center" }}>
-                <Text style={{ fontFamily: MONO, fontSize: 12, color: C.green }}>▶ {d}D</Text>
-              </TouchableOpacity>
-            ))}
-            <TouchableOpacity onPress={() => {
-              setSimLog([]);
-              setSimHealth(100);
-              setHasSimulated(false);
-              setActiveScenario(null);
-            }}
-              style={{ paddingHorizontal: 14, paddingVertical: 12, backgroundColor: C.surface,
-                borderRadius: 8, borderWidth: 1, borderColor: C.border, alignItems: "center" }}>
-              <Text style={{ fontFamily: MONO, fontSize: 12, color: C.greyLight }}>↺</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* D. Active symptoms */}
-          {hasSimulated && simLog.length > 0 && (
-            <View style={{ marginTop: 16 }}>
-              <Label style={{ marginBottom: 8 }}>Active symptoms</Label>
-              {simLog[simLog.length - 1].symptoms.map((s, i) => (
-                <Text key={i} style={{ fontFamily: MONO, fontSize: 12,
-                  color: s.includes("healthy") ? C.green : C.amber, marginBottom: 4 }}>
-                  {s.includes("healthy") ? "✓ " : "⚠ "}{s}
+          {/* ── A. SETUP PHASE ── */}
+          {simPhase === "setup" && (
+            <View>
+              {/* Header */}
+              <View style={{ marginBottom: 20 }}>
+                <Text style={{ color: C.green, fontFamily: MONO, fontSize: 20,
+                  fontWeight: "bold", letterSpacing: 2, marginBottom: 4 }}>
+                  VPD HAZARD SIM
                 </Text>
-              ))}
+                <Text style={{ color: C.greyLight, fontFamily: MONO, fontSize: 12 }}>
+                  Assign hazards to your grow. Run the sim. See what breaks.
+                </Text>
+                {runCount > 0 && (
+                  <Text style={{ color: C.amber, fontFamily: MONO, fontSize: 11, marginTop: 6 }}>
+                    Free run — choose FIX or IGNORE at each hazard
+                  </Text>
+                )}
+              </View>
+
+              {/* Baseline conditions */}
+              <Label style={{ marginBottom: 10 }}>BASELINE CONDITIONS</Label>
+              <NumInput label="BASELINE TEMP" value={temp}
+                onChange={setTemp} unit="°C" min={10} max={40} step={0.5} />
+              <NumInput label="BASELINE RH" value={rh}
+                onChange={setRh} unit="%" min={10} max={100} step={1} />
+
+              {/* Stage hazard grid */}
+              <Label style={{ marginBottom: 10 }}>ASSIGN HAZARDS TO STAGES</Label>
+              {SIM_STAGES.map(simStage => {
+                const assignedKey  = hazardSlots[simStage.key];
+                const assignedHaz  = assignedKey ? SIM_HAZARDS.find(h => h.key === assignedKey) : null;
+                return (
+                  <View key={simStage.key} style={{
+                    backgroundColor: C.surface, borderRadius: 8,
+                    borderWidth: 1, borderColor: C.border,
+                    padding: 12, marginBottom: 8,
+                    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+                  }}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: C.white, fontFamily: MONO,
+                        fontSize: 12, fontWeight: "bold" }}>
+                        {simStage.label}
+                      </Text>
+                      <Text style={{ color: C.grey, fontFamily: MONO, fontSize: 10 }}>
+                        {simStage.dayRange}
+                      </Text>
+                    </View>
+                    {assignedHaz ? (
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                        <View style={{ backgroundColor: `${severityColor(assignedHaz.severity)}22`,
+                          borderRadius: 6, borderWidth: 1,
+                          borderColor: severityColor(assignedHaz.severity),
+                          paddingHorizontal: 10, paddingVertical: 5 }}>
+                          <Text style={{ fontFamily: MONO, fontSize: 12 }}>
+                            {assignedHaz.icon} {assignedHaz.name}
+                          </Text>
+                        </View>
+                        <TouchableOpacity onPress={() => {
+                          const next = { ...hazardSlots };
+                          delete next[simStage.key];
+                          setHazardSlots(next);
+                        }} style={{ padding: 4 }}>
+                          <Text style={{ color: C.grey, fontFamily: MONO, fontSize: 16 }}>×</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      <TouchableOpacity onPress={() => setPickingHazardFor(simStage.key)}
+                        style={{ backgroundColor: C.greenFaint, borderRadius: 6,
+                          borderWidth: 1, borderColor: C.greenDim,
+                          paddingHorizontal: 12, paddingVertical: 6 }}>
+                        <Text style={{ color: C.green, fontFamily: MONO, fontSize: 11 }}>
+                          + ADD HAZARD
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                );
+              })}
+
+              {/* Hazard picker overlay */}
+              {pickingHazardFor !== null && (
+                <View style={{ backgroundColor: C.card, borderRadius: 10,
+                  borderWidth: 1, borderColor: C.border,
+                  marginTop: 8, marginBottom: 8, padding: 12 }}>
+                  <View style={{ flexDirection: "row", justifyContent: "space-between",
+                    alignItems: "center", marginBottom: 10 }}>
+                    <Text style={{ color: C.greyLight, fontFamily: MONO,
+                      fontSize: 10, letterSpacing: 1.5 }}>
+                      SELECT HAZARD FOR{" "}
+                      {SIM_STAGES.find(s => s.key === pickingHazardFor)?.label}
+                    </Text>
+                    <TouchableOpacity onPress={() => setPickingHazardFor(null)}>
+                      <Text style={{ color: C.grey, fontFamily: MONO, fontSize: 16 }}>✕</Text>
+                    </TouchableOpacity>
+                  </View>
+                  {/* NONE option */}
+                  <TouchableOpacity onPress={() => {
+                    const next = { ...hazardSlots };
+                    delete next[pickingHazardFor];
+                    setHazardSlots(next);
+                    setPickingHazardFor(null);
+                  }} style={{ flexDirection: "row", alignItems: "center",
+                    paddingVertical: 10, borderBottomWidth: 1, borderColor: C.border, gap: 10 }}>
+                    <View style={{ width: 10, height: 10, borderRadius: 5,
+                      backgroundColor: C.grey }} />
+                    <Text style={{ color: C.greyLight, fontFamily: MONO, fontSize: 12 }}>
+                      NONE — no hazard
+                    </Text>
+                  </TouchableOpacity>
+                  {SIM_HAZARDS.map(haz => (
+                    <TouchableOpacity key={haz.key} onPress={() => {
+                      setHazardSlots(prev => ({ ...prev, [pickingHazardFor]: haz.key }));
+                      setPickingHazardFor(null);
+                    }} style={{ flexDirection: "row", alignItems: "center",
+                      paddingVertical: 10, borderBottomWidth: 1, borderColor: C.border, gap: 10 }}>
+                      <View style={{ width: 10, height: 10, borderRadius: 5,
+                        backgroundColor: severityColor(haz.severity) }} />
+                      <Text style={{ fontSize: 16 }}>{haz.icon}</Text>
+                      <Text style={{ flex: 1, color: C.white, fontFamily: MONO, fontSize: 12 }}>
+                        {haz.name}
+                      </Text>
+                      <Text style={{ color: severityColor(haz.severity),
+                        fontFamily: MONO, fontSize: 10, textTransform: "uppercase" }}>
+                        {haz.severity}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+
+              {/* RUN SIMULATION button */}
+              <TouchableOpacity
+                disabled={!hasAnyHazard}
+                onPress={() => {
+                  const log = computeGrow(temp, rh, hazardSlots);
+                  setSimLog(log);
+                  setSimStageIdx(0);
+                  setFreeChoice({});
+                  setSimPhase("playing");
+                }}
+                style={{ marginTop: 16, paddingVertical: 16, borderRadius: 10,
+                  alignItems: "center", justifyContent: "center",
+                  backgroundColor: hasAnyHazard ? C.greenFaint : C.surface,
+                  borderWidth: 1,
+                  borderColor: hasAnyHazard ? C.green : C.border }}>
+                <Text style={{ fontFamily: MONO, fontSize: 14, fontWeight: "bold",
+                  letterSpacing: 2,
+                  color: hasAnyHazard ? C.green : C.grey }}>
+                  RUN SIMULATION
+                </Text>
+                {!hasAnyHazard && (
+                  <Text style={{ fontFamily: MONO, fontSize: 10, color: C.grey, marginTop: 3 }}>
+                    assign at least one hazard to continue
+                  </Text>
+                )}
+              </TouchableOpacity>
             </View>
           )}
 
-          {/* E. Prevention tips */}
-          {hasSimulated && (() => {
-            const currentVpd = calcVPD(temp, rh);
-            const tips = getPreventionTips(temp, currentVpd, stage, simNutrients, simWater);
+          {/* ── B. PLAYING PHASE ── */}
+          {simPhase === "playing" && simLog.length > 0 && (() => {
+            const currentEntry = simLog[simStageIdx];
+            const { stage: curStage, hazard, endHealth } = currentEntry;
+            const healthPct = Math.round(endHealth * 100);
+            const hc = healthColor(endHealth);
+            const progressPct = ((simStageIdx + 1) / simLog.length) * 100;
+
             return (
-              <View style={{ marginTop: 16 }}>
-                <Label style={{ marginBottom: 8 }}>Prevention</Label>
-                {tips.map((tip, i) => (
-                  <Text key={i} style={{ fontFamily: MONO, fontSize: 12,
-                    color: tip.includes("optimal") ? C.green : C.blue, marginBottom: 4 }}>
-                    {tip.includes("optimal") ? "✓ " : "→ "}{tip}
+              <View>
+                {/* Top bar with abort */}
+                <View style={{ flexDirection: "row", justifyContent: "space-between",
+                  alignItems: "center", marginBottom: 12 }}>
+                  <Text style={{ color: C.greyLight, fontFamily: MONO, fontSize: 11 }}>
+                    STAGE {simStageIdx + 1} / {simLog.length}
                   </Text>
-                ))}
+                  <TouchableOpacity onPress={() => {
+                    setSimPhase("setup");
+                    setSimStageIdx(0);
+                  }} style={{ paddingHorizontal: 10, paddingVertical: 5,
+                    borderRadius: 6, borderWidth: 1, borderColor: C.border }}>
+                    <Text style={{ color: C.grey, fontFamily: MONO, fontSize: 11 }}>✗ ABORT</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Stage label */}
+                <Text style={{ color: C.white, fontFamily: MONO, fontSize: 16,
+                  fontWeight: "bold", letterSpacing: 1, marginBottom: 2 }}>
+                  {curStage.label}
+                </Text>
+                <Text style={{ color: C.greyLight, fontFamily: MONO,
+                  fontSize: 11, marginBottom: 10 }}>
+                  {curStage.dayRange}
+                </Text>
+
+                {/* Progress bar */}
+                <View style={{ height: 4, backgroundColor: C.surface,
+                  borderRadius: 2, overflow: "hidden", marginBottom: 16 }}>
+                  <View style={{ width: `${progressPct}%`, height: 4,
+                    backgroundColor: C.greenDim, borderRadius: 2 }} />
+                </View>
+
+                {/* Plant visual */}
+                <View style={{ backgroundColor: C.surface, borderRadius: 12,
+                  overflow: "hidden", alignItems: "center",
+                  marginBottom: 16, padding: 8 }}>
+                  <PlantRenderer
+                    width={SW - 48}
+                    height={190}
+                    stage={curStage.rendStage}
+                    stressLevel={1 - endHealth}
+                    strainType="H"
+                    tier="T2"
+                    strainSeed={42}
+                  />
+                </View>
+
+                {/* Health readout */}
+                <View style={{ marginBottom: 16 }}>
+                  <Label style={{ marginBottom: 6 }}>PLANT HEALTH — END OF STAGE</Label>
+                  <View style={{ height: 10, backgroundColor: C.surface,
+                    borderRadius: 5, overflow: "hidden", marginBottom: 6 }}>
+                    <View style={{ width: `${healthPct}%`, height: 10,
+                      backgroundColor: hc, borderRadius: 5 }} />
+                  </View>
+                  <Text style={{ fontFamily: MONO, fontSize: 13,
+                    fontWeight: "bold", color: hc }}>
+                    {healthPct}%{" "}
+                    {healthPct >= 80 ? "HEALTHY" : healthPct >= 50 ? "STRESSED" : "CRITICAL"}
+                  </Text>
+                </View>
+
+                {/* No hazard stage */}
+                {!hazard && (
+                  <View>
+                    <View style={{ backgroundColor: C.greenFaint, borderRadius: 8,
+                      borderWidth: 1, borderColor: C.greenDim,
+                      padding: 14, marginBottom: 16 }}>
+                      <Text style={{ color: C.green, fontFamily: MONO, fontSize: 13 }}>
+                        ✓ STAGE CLEAN — no hazard this stage
+                      </Text>
+                    </View>
+                    <TouchableOpacity onPress={() => advance(null)}
+                      style={{ paddingVertical: 15, borderRadius: 10,
+                        backgroundColor: C.greenFaint, borderWidth: 1,
+                        borderColor: C.green, alignItems: "center" }}>
+                      <Text style={{ color: C.green, fontFamily: MONO,
+                        fontSize: 13, fontWeight: "bold" }}>
+                        CONTINUE →
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                {/* Hazard pause card */}
+                {hazard && (
+                  <View>
+                    <View style={{ backgroundColor: C.surface, borderRadius: 8,
+                      borderWidth: 1, borderColor: C.border,
+                      borderLeftWidth: 3, borderLeftColor: severityColor(hazard.severity),
+                      padding: 16, marginBottom: 14 }}>
+                      {/* Growver narration */}
+                      <Text style={{ color: C.amber, fontFamily: MONO,
+                        fontSize: 13, fontStyle: "italic",
+                        lineHeight: 20, marginBottom: 12 }}>
+                        "{hazard.growver}"
+                      </Text>
+
+                      {/* Severity badge */}
+                      <View style={{ flexDirection: "row", alignItems: "center",
+                        gap: 8, marginBottom: 12 }}>
+                        <Text style={{ fontSize: 18 }}>{hazard.icon}</Text>
+                        <Text style={{ color: C.white, fontFamily: MONO,
+                          fontSize: 13, fontWeight: "bold" }}>
+                          {hazard.name}
+                        </Text>
+                        <View style={{ paddingHorizontal: 8, paddingVertical: 3,
+                          borderRadius: 4,
+                          backgroundColor: `${severityColor(hazard.severity)}22`,
+                          borderWidth: 1, borderColor: severityColor(hazard.severity) }}>
+                          <Text style={{ color: severityColor(hazard.severity),
+                            fontFamily: MONO, fontSize: 10,
+                            textTransform: "uppercase" }}>
+                            {hazard.severity}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* Cause */}
+                      <Label style={{ marginBottom: 5 }}>CAUSE</Label>
+                      <Text style={{ color: C.greyLight, fontFamily: MONO,
+                        fontSize: 12, lineHeight: 18, marginBottom: 12 }}>
+                        {hazard.cause}
+                      </Text>
+
+                      {/* Effects */}
+                      <Label style={{ marginBottom: 5 }}>EFFECTS</Label>
+                      {hazard.effects.map((e, i) => (
+                        <Text key={i} style={{ color: C.white, fontFamily: MONO,
+                          fontSize: 12, lineHeight: 19, marginBottom: 3 }}>
+                          • {e}
+                        </Text>
+                      ))}
+
+                      {/* Fix */}
+                      <Label style={{ marginTop: 10, marginBottom: 5 }}>FIX</Label>
+                      {hazard.fix.map((f, i) => (
+                        <Text key={i} style={{ color: C.green, fontFamily: MONO,
+                          fontSize: 12, lineHeight: 19, marginBottom: 3 }}>
+                          → {f}
+                        </Text>
+                      ))}
+                    </View>
+
+                    {/* First run: linear */}
+                    {runCount === 0 && (
+                      <TouchableOpacity onPress={() => advance(null)}
+                        style={{ paddingVertical: 15, borderRadius: 10,
+                          backgroundColor: C.greenFaint, borderWidth: 1,
+                          borderColor: C.green, alignItems: "center" }}>
+                        <Text style={{ color: C.green, fontFamily: MONO,
+                          fontSize: 13, fontWeight: "bold" }}>
+                          CONTINUE →
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+
+                    {/* Free runs: fix or ignore */}
+                    {runCount > 0 && (
+                      <View style={{ flexDirection: "row", gap: 10 }}>
+                        <TouchableOpacity onPress={() => advance("fix")}
+                          style={{ flex: 1, paddingVertical: 15, borderRadius: 10,
+                            backgroundColor: C.greenFaint, borderWidth: 1,
+                            borderColor: C.green, alignItems: "center" }}>
+                          <Text style={{ color: C.green, fontFamily: MONO,
+                            fontSize: 13, fontWeight: "bold" }}>
+                            ✓ FIX IT
+                          </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => advance("ignore")}
+                          style={{ flex: 1, paddingVertical: 15, borderRadius: 10,
+                            backgroundColor: C.surface, borderWidth: 1,
+                            borderColor: C.red, alignItems: "center" }}>
+                          <Text style={{ color: C.red, fontFamily: MONO,
+                            fontSize: 13, fontWeight: "bold" }}>
+                            ✗ IGNORE
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
+                  </View>
+                )}
               </View>
             );
           })()}
 
-          {/* F. Day log */}
-          {hasSimulated && simLog.length > 0 && (
-            <View style={{ marginTop: 16 }}>
-              <Label style={{ marginBottom: 8 }}>Day log</Label>
-              {[...simLog].reverse().map(entry => {
-                const hc = entry.health >= 80 ? C.green : entry.health >= 55 ? C.amber : C.red;
-                return (
-                  <View key={entry.day} style={{ flexDirection: "row", alignItems: "center",
-                    paddingVertical: 8, borderBottomWidth: 1, borderColor: C.border }}>
-                    <Text style={{ fontFamily: MONO, fontSize: 11, color: C.grey, width: 44 }}>
-                      DAY {entry.day}
-                    </Text>
-                    <View style={{ flex: 1, height: 6, backgroundColor: C.surface,
-                      borderRadius: 3, overflow: "hidden", marginHorizontal: 8 }}>
-                      <View style={{ width: `${entry.health}%`, height: 6,
-                        backgroundColor: hc, borderRadius: 3 }} />
-                    </View>
-                    <Text style={{ fontFamily: MONO, fontSize: 11, color: hc, width: 36, textAlign: "right" }}>
-                      {entry.health}%
-                    </Text>
-                  </View>
-                );
-              })}
-            </View>
-          )}
+          {/* ── C. RESULTS PHASE ── */}
+          {simPhase === "results" && simLog.length > 0 && (() => {
+            const lastEntry  = simLog[simLog.length - 1];
+            const finalH     = lastEntry.endHealth;
+            const finalPct   = Math.round(finalH * 100);
+            const grade      = healthGrade(finalH);
+            const hc         = healthColor(finalH);
 
-          {/* G. Scenario bank */}
-          <View style={{ marginTop: 20 }}>
-            <Label style={{ marginBottom: 10 }}>Scenario bank</Label>
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-              {SCENARIOS.map(s => (
-                <TouchableOpacity
-                  key={s.name}
-                  onPress={() => loadScenario(s)}
-                  style={{
-                    width: (SW - 48 - 8) / 2,
-                    padding: 12,
-                    backgroundColor: activeScenario === s.name ? C.greenFaint : C.surface,
-                    borderRadius: 8, borderWidth: 1,
-                    borderColor: activeScenario === s.name ? C.green : C.border,
-                  }}>
-                  <Text style={{ fontFamily: MONO, fontSize: 16, marginBottom: 4 }}>{s.icon}</Text>
-                  <Text style={{ fontFamily: MONO, fontSize: 11, color: C.white, marginBottom: 3, letterSpacing: 0.5 }}>
-                    {s.name}
+            return (
+              <View>
+                {/* Header */}
+                <Text style={{ color: C.green, fontFamily: MONO, fontSize: 18,
+                  fontWeight: "bold", letterSpacing: 2, marginBottom: 4 }}>
+                  SIMULATION COMPLETE
+                </Text>
+                <Text style={{ color: C.greyLight, fontFamily: MONO,
+                  fontSize: 11, marginBottom: 20 }}>
+                  {runCount === 0
+                    ? "First run — all hazards fired. Try a free run to explore outcomes."
+                    : `Free run ${runCount} complete.`}
+                </Text>
+
+                {/* Final plant visual */}
+                <View style={{ backgroundColor: C.surface, borderRadius: 12,
+                  overflow: "hidden", alignItems: "center",
+                  marginBottom: 16, padding: 8 }}>
+                  <PlantRenderer
+                    width={SW - 48}
+                    height={200}
+                    stage="Late Flower"
+                    stressLevel={1 - finalH}
+                    strainType="H"
+                    tier="T2"
+                    strainSeed={42}
+                  />
+                </View>
+
+                {/* Final health + grade */}
+                <View style={{ backgroundColor: C.card, borderRadius: 10,
+                  borderWidth: 1, borderColor: hc,
+                  padding: 16, alignItems: "center", marginBottom: 20 }}>
+                  <Text style={{ color: hc, fontFamily: MONO,
+                    fontSize: 48, fontWeight: "bold" }}>
+                    {grade}
                   </Text>
-                  <Text style={{ fontFamily: MONO, fontSize: 10, color: C.greyLight, lineHeight: 15 }}>
-                    {s.desc}
+                  <Text style={{ color: hc, fontFamily: MONO,
+                    fontSize: 16, fontWeight: "bold" }}>
+                    {finalPct}% FINAL HEALTH
                   </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
+                </View>
+
+                {/* Per-stage timeline */}
+                <Label style={{ marginBottom: 10 }}>STAGE BREAKDOWN</Label>
+                {simLog.map((entry, i) => {
+                  const ehPct = Math.round(entry.endHealth * 100);
+                  const ehc   = healthColor(entry.endHealth);
+                  return (
+                    <View key={i} style={{ flexDirection: "row", alignItems: "center",
+                      paddingVertical: 9, borderBottomWidth: 1, borderColor: C.border, gap: 8 }}>
+                      <Text style={{ fontFamily: MONO, fontSize: 10,
+                        color: C.greyLight, width: 80 }}>
+                        {entry.stage.label}
+                      </Text>
+                      <View style={{ flex: 1, height: 7, backgroundColor: C.surface,
+                        borderRadius: 4, overflow: "hidden" }}>
+                        <View style={{ width: `${ehPct}%`, height: 7,
+                          backgroundColor: ehc, borderRadius: 4 }} />
+                      </View>
+                      <Text style={{ fontFamily: MONO, fontSize: 11,
+                        color: ehc, width: 36, textAlign: "right" }}>
+                        {ehPct}%
+                      </Text>
+                      {entry.hazard && (
+                        <Text style={{ fontSize: 14 }}>{entry.hazard.icon}</Text>
+                      )}
+                    </View>
+                  );
+                })}
+
+                {/* Summary */}
+                {simLog.some(e => e.hazard) && (
+                  <View style={{ marginTop: 20 }}>
+                    <Label style={{ marginBottom: 10 }}>HAZARD IMPACT</Label>
+                    {simLog.filter(e => e.hazard).map((entry, i) => {
+                      const startPct = Math.round(entry.startHealth * 100);
+                      const endPct   = Math.round(entry.endHealth * 100);
+                      return (
+                        <Text key={i} style={{ fontFamily: MONO, fontSize: 12,
+                          color: C.greyLight, lineHeight: 20, marginBottom: 4 }}>
+                          {entry.hazard.icon} {entry.hazard.name}{" "}
+                          <Text style={{ color: C.grey }}>({entry.stage.label})</Text>
+                          {" — "}
+                          <Text style={{ color: C.amber }}>
+                            health dropped from {startPct}% to {endPct}%
+                          </Text>
+                        </Text>
+                      );
+                    })}
+                  </View>
+                )}
+
+                {/* Action buttons */}
+                <View style={{ gap: 10, marginTop: 24 }}>
+                  <TouchableOpacity onPress={() => {
+                    setRunCount(r => r + 1);
+                    setSimStageIdx(0);
+                    setFreeChoice({});
+                    const log = computeGrow(temp, rh, hazardSlots);
+                    setSimLog(log);
+                    setSimPhase("playing");
+                  }} style={{ paddingVertical: 15, borderRadius: 10,
+                    backgroundColor: C.greenFaint, borderWidth: 1,
+                    borderColor: C.green, alignItems: "center" }}>
+                    <Text style={{ color: C.green, fontFamily: MONO,
+                      fontSize: 13, fontWeight: "bold", letterSpacing: 1 }}>
+                      RUN AGAIN — FREE RUN
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => {
+                    setSimPhase("setup");
+                    setHazardSlots({});
+                    setRunCount(0);
+                    setSimLog([]);
+                    setSimStageIdx(0);
+                    setFreeChoice({});
+                  }} style={{ paddingVertical: 15, borderRadius: 10,
+                    backgroundColor: C.surface, borderWidth: 1,
+                    borderColor: C.border, alignItems: "center" }}>
+                    <Text style={{ color: C.greyLight, fontFamily: MONO,
+                      fontSize: 13, fontWeight: "bold", letterSpacing: 1 }}>
+                      NEW SIMULATION
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            );
+          })()}
 
         </ScrollView>
       )}
