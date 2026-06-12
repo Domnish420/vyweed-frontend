@@ -23,23 +23,28 @@ import { getApiV1, BACKEND_HEADERS } from "./apiConfig";
 const API_BASE = { toString: () => getApiV1() };
 
 const C = {
-  bg:         "#070a07",
-  surface:    "#0d120d",
-  card:       "#111811",
-  border:     "#1a2a1a",
-  green:      "#39ff45",
-  greenFaint: "#0d3d12",
-  greenDim:   "#1a7a20",
-  amber:      "#ffb830",
-  red:        "#ff3a3a",
-  blue:       "#30d5ff",
-  purple:     "#c084fc",
-  white:      "#e8f0e8",
-  grey:       "#4a5a4a",
-  greyLight:  "#8a9a8a",
+  bg:          "#0a0f0a",
+  surface:     "#0f150f",
+  card:        "#141a13",
+  border:      "#2a3d2e",
+  green:       "#4d7358",
+  greenFaint:  "#1a2d1f",
+  greenDim:    "#3a5c44",
+  greenBright: "#6db87f",
+  amber:       "#c17a4a",
+  red:         "#a83030",
+  blue:        "#5b9bd5",
+  purple:      "#8b6abf",
+  white:       "#e8e4d9",
+  grey:        "#4a5a4a",
+  greyLight:   "#8a9e8c",
 };
 
-const MONO = Platform.select({ ios: "Courier New", android: "monospace" });
+const HEADING   = "BebasNeue_400Regular";
+const SANS      = "SpaceGrotesk_400Regular";
+const SANS_MED  = "SpaceGrotesk_500Medium";
+const SANS_BOLD = "SpaceGrotesk_700Bold";
+const MONO      = SANS;
 
 const SERIES = [
   { key: "temp_day", label: "Temp",     colour: C.red,    unit: "°C",    ideal: [22, 27], min: 15, max: 35 },
@@ -50,8 +55,8 @@ const SERIES = [
 
 function Label({ children, style }) {
   return (
-    <Text style={[{ color: C.greyLight, fontFamily: MONO, fontSize: 10,
-      letterSpacing: 1.5, textTransform: "uppercase" }, style]}>
+    <Text style={[{ color: C.greyLight, fontFamily: HEADING, fontSize: 12,
+      letterSpacing: 2, textTransform: "uppercase" }, style]}>
       {children}
     </Text>
   );
@@ -166,8 +171,8 @@ function StatCard({ label, value, unit, colour, ideal }) {
     <View style={{ flex: 1, backgroundColor: C.surface, borderRadius: 8,
       borderWidth: 1, borderColor: C.border, padding: 10, alignItems: "center" }}>
       <Label style={{ fontSize: 8 }}>{label}</Label>
-      <Text style={{ color: colour, fontFamily: MONO,
-        fontSize: 20, fontWeight: "bold", marginTop: 4 }}>
+      <Text style={{ color: colour, fontFamily: HEADING,
+        fontSize: 20, marginTop: 4 }}>
         {value != null ? `${value}${unit}` : "—"}
       </Text>
       {ideal && value != null && (
@@ -190,7 +195,7 @@ function LogRow({ log, onPress }) {
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
             <View style={{ backgroundColor: C.greenFaint, borderRadius: 12,
               paddingHorizontal: 8, paddingVertical: 3 }}>
-              <Text style={{ color: C.green, fontFamily: MONO, fontSize: 11, fontWeight: "bold" }}>
+              <Text style={{ color: C.green, fontFamily: HEADING, fontSize: 11 }}>
                 Day {log.day}
               </Text>
             </View>
@@ -221,14 +226,14 @@ function LogDetailModal({ log, onClose }) {
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>
       <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.85)", justifyContent: "flex-end" }}>
         <View style={{ backgroundColor: C.card, borderTopLeftRadius: 20,
-          borderTopRightRadius: 20, borderTopWidth: 2, borderColor: C.green, paddingBottom: 40 }}>
+          borderTopRightRadius: 20, borderTopWidth: 2, borderColor: C.greenBright, paddingBottom: 40 }}>
           <View style={{ alignItems: "center", paddingTop: 10, paddingBottom: 4 }}>
             <View style={{ width: 40, height: 4, backgroundColor: C.border, borderRadius: 2 }} />
           </View>
           <View style={{ flexDirection: "row", justifyContent: "space-between",
             alignItems: "center", paddingHorizontal: 16, paddingBottom: 12,
             borderBottomWidth: 1, borderColor: C.border }}>
-            <Text style={{ color: C.green, fontFamily: MONO, fontSize: 16, fontWeight: "bold" }}>
+            <Text style={{ color: C.greenBright, fontFamily: HEADING, fontSize: 20, letterSpacing: 1 }}>
               DAY {log.day} — {log.date}
             </Text>
             <TouchableOpacity onPress={onClose}>
@@ -245,7 +250,7 @@ function LogDetailModal({ log, onClose }) {
                   alignItems: "center", paddingVertical: 12,
                   borderBottomWidth: 1, borderColor: C.border }}>
                   <View>
-                    <Text style={{ color: s.colour, fontFamily: MONO, fontSize: 13, fontWeight: "bold" }}>
+                    <Text style={{ color: s.colour, fontFamily: SANS_MED, fontSize: 13 }}>
                       {s.label}
                     </Text>
                     <Text style={{ color: C.grey, fontFamily: MONO, fontSize: 10 }}>
@@ -253,7 +258,7 @@ function LogDetailModal({ log, onClose }) {
                     </Text>
                   </View>
                   <View style={{ alignItems: "flex-end" }}>
-                    <Text style={{ color: s.colour, fontFamily: MONO, fontSize: 22, fontWeight: "bold" }}>
+                    <Text style={{ color: s.colour, fontFamily: SANS_MED, fontSize: 22 }}>
                       {val}{s.unit}
                     </Text>
                     <Text style={{ color: inRange ? C.green : C.amber, fontFamily: MONO, fontSize: 10 }}>
@@ -318,7 +323,7 @@ export default function GrowTimeline({ growId, strainName, onBack }) {
     return (
       <View style={{ flex: 1, backgroundColor: C.bg, alignItems: "center", justifyContent: "center" }}>
         <ActivityIndicator color={C.green} size="large" />
-        <Text style={{ color: C.grey, fontFamily: MONO, fontSize: 12, marginTop: 12 }}>
+        <Text style={{ color: C.greenBright, fontFamily: HEADING, fontSize: 20, letterSpacing: 2, marginTop: 12 }}>
           LOADING TIMELINE...
         </Text>
       </View>
@@ -332,12 +337,12 @@ export default function GrowTimeline({ growId, strainName, onBack }) {
         paddingTop: Platform.OS === "android" ? 16 : 52, paddingBottom: 12,
         borderBottomWidth: 1, borderColor: C.border, backgroundColor: C.card }}>
         <TouchableOpacity onPress={onBack} style={{ marginBottom: 8 }}>
-          <Text style={{ color: C.green, fontFamily: MONO, fontSize: 14 }}>← BACK</Text>
+          <Text style={{ color: C.greenBright, fontFamily: HEADING, fontSize: 16, letterSpacing: 1.5 }}>← BACK</Text>
         </TouchableOpacity>
-        <Text style={{ color: C.white, fontFamily: MONO, fontSize: 18, fontWeight: "bold" }}>
+        <Text style={{ color: C.white, fontFamily: HEADING, fontSize: 24, letterSpacing: 1 }}>
           {strainName}
         </Text>
-        <Text style={{ color: C.grey, fontFamily: MONO, fontSize: 11, marginTop: 2 }}>
+        <Text style={{ color: C.grey, fontFamily: SANS_MED, fontSize: 11, marginTop: 2 }}>
           GROW TIMELINE · Day {timeline?.current_day} · {timeline?.log_count} logs
         </Text>
       </View>
@@ -357,8 +362,8 @@ export default function GrowTimeline({ growId, strainName, onBack }) {
         {[["chart", "📈 CHART"], ["logs", "📋 LOGS"]].map(([tab, label]) => (
           <TouchableOpacity key={tab} onPress={() => setActiveTab(tab)}
             style={{ flex: 1, paddingVertical: 12, alignItems: "center",
-              borderBottomWidth: 2, borderColor: activeTab === tab ? C.green : "transparent" }}>
-            <Text style={{ color: activeTab === tab ? C.green : C.grey, fontFamily: MONO, fontSize: 11 }}>
+              borderBottomWidth: 2, borderColor: activeTab === tab ? C.greenBright : "transparent" }}>
+            <Text style={{ color: activeTab === tab ? C.greenBright : C.grey, fontFamily: HEADING, fontSize: 14, letterSpacing: 1.5 }}>
               {label}
             </Text>
           </TouchableOpacity>
@@ -396,7 +401,7 @@ export default function GrowTimeline({ growId, strainName, onBack }) {
                 <View key={seriesKey} style={{ marginHorizontal: 12, marginBottom: 12,
                   backgroundColor: C.card, borderRadius: 8, borderWidth: 1,
                   borderColor: C.border, padding: 16, alignItems: "center" }}>
-                  <Text style={{ color: s.colour, fontFamily: MONO, fontSize: 12, fontWeight: "bold" }}>
+                  <Text style={{ color: s.colour, fontFamily: SANS_MED, fontSize: 12 }}>
                     {s.label}
                   </Text>
                   <Text style={{ color: C.grey, fontFamily: MONO, fontSize: 11, marginTop: 6 }}>
@@ -411,7 +416,7 @@ export default function GrowTimeline({ growId, strainName, onBack }) {
                   <View style={{ backgroundColor: C.surface, paddingHorizontal: 12,
                     paddingVertical: 8, flexDirection: "row", alignItems: "center", gap: 6 }}>
                     <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: s.colour }} />
-                    <Text style={{ color: s.colour, fontFamily: MONO, fontSize: 11, fontWeight: "bold" }}>
+                    <Text style={{ color: s.colour, fontFamily: SANS_MED, fontSize: 11 }}>
                       {s.label} {s.unit && `(${s.unit})`}
                     </Text>
                     <Text style={{ color: C.grey, fontFamily: MONO, fontSize: 9 }}>
@@ -456,7 +461,7 @@ export default function GrowTimeline({ growId, strainName, onBack }) {
           {!timeline?.logs?.length ? (
             <View style={{ alignItems: "center", paddingVertical: 60 }}>
               <Text style={{ fontSize: 36 }}>📋</Text>
-              <Text style={{ color: C.green, fontFamily: MONO, fontSize: 14, marginTop: 12 }}>
+              <Text style={{ color: C.greenBright, fontFamily: HEADING, fontSize: 20, letterSpacing: 2, marginTop: 12 }}>
                 NO LOGS YET
               </Text>
               <Text style={{ color: C.grey, fontFamily: MONO, fontSize: 12, marginTop: 6 }}>

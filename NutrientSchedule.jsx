@@ -21,33 +21,38 @@ import { getApiV1, BACKEND_HEADERS } from "./apiConfig";
 const API_BASE = { toString: () => getApiV1() };
 
 const C = {
-  bg:         "#070a07",
-  surface:    "#0d120d",
-  card:       "#111811",
-  border:     "#1a2a1a",
-  green:      "#39ff45",
-  greenFaint: "#0d3d12",
-  greenDim:   "#1a7a20",
-  amber:      "#ffb830",
-  red:        "#ff3a3a",
-  blue:       "#30d5ff",
-  purple:     "#c084fc",
-  white:      "#e8f0e8",
-  grey:       "#4a5a4a",
-  greyLight:  "#8a9a8a",
+  bg:          "#0a0f0a",
+  surface:     "#0f150f",
+  card:        "#141a13",
+  border:      "#2a3d2e",
+  green:       "#4d7358",
+  greenFaint:  "#1a2d1f",
+  greenDim:    "#3a5c44",
+  greenBright: "#6db87f",
+  amber:       "#c17a4a",
+  red:         "#a83030",
+  blue:        "#5b9bd5",
+  purple:      "#8b6abf",
+  white:       "#e8e4d9",
+  grey:        "#4a5a4a",
+  greyLight:   "#8a9e8c",
 };
 
-const MONO = Platform.select({ ios: "Courier New", android: "monospace" });
+const HEADING   = "BebasNeue_400Regular";
+const SANS      = "SpaceGrotesk_400Regular";
+const SANS_MED  = "SpaceGrotesk_500Medium";
+const SANS_BOLD = "SpaceGrotesk_700Bold";
+const MONO      = SANS;
 
 const STAGE_COLOURS = {
-  "Seedling":            "#30d5ff",
-  "Early Vegetative":    "#39ff45",
-  "Late Vegetative":     "#39ff45",
-  "Transition (Flip)":   "#ffb830",
-  "Early Flower":        "#ff8c30",
-  "Mid Flower":          "#ff5a1a",
-  "Late Flower":         "#ff3a3a",
-  "Flush (Pre-Harvest)": "#c084fc",
+  "Seedling":            "#5b9bd5",
+  "Early Vegetative":    "#6db87f",
+  "Late Vegetative":     "#6db87f",
+  "Transition (Flip)":   "#c17a4a",
+  "Early Flower":        "#c17a4a",
+  "Mid Flower":          "#b35a30",
+  "Late Flower":         "#a83030",
+  "Flush (Pre-Harvest)": "#8b6abf",
 };
 
 const BRANDS = [
@@ -60,8 +65,8 @@ const BRANDS = [
 
 function Label({ children, style }) {
   return (
-    <Text style={[{ color: C.greyLight, fontFamily: MONO, fontSize: 10,
-      letterSpacing: 1.5, textTransform: "uppercase" }, style]}>
+    <Text style={[{ color: C.greyLight, fontFamily: HEADING, fontSize: 12,
+      letterSpacing: 2, textTransform: "uppercase" }, style]}>
       {children}
     </Text>
   );
@@ -73,7 +78,7 @@ function NPKBar({ label, value, colour, max = 10 }) {
   return (
     <View style={{ marginBottom: 6 }}>
       <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 3 }}>
-        <Text style={{ color: colour, fontFamily: MONO, fontSize: 11, fontWeight: "bold" }}>
+        <Text style={{ color: colour, fontFamily: SANS_MED, fontSize: 11 }}>
           {label}
         </Text>
         <Text style={{ color: colour, fontFamily: MONO, fontSize: 11 }}>
@@ -102,7 +107,7 @@ function WeekCard({ week, brand, onPress, currentWeek }) {
         backgroundColor: isCurrent ? C.greenFaint : C.card,
         borderRadius: 8,
         borderWidth: isCurrent ? 2 : 1,
-        borderColor: isCurrent ? C.green : C.border,
+        borderColor: isCurrent ? C.greenBright : C.border,
         borderLeftWidth: 4, borderLeftColor: stageCol,
         padding: 14, marginBottom: 8,
       }}>
@@ -114,25 +119,25 @@ function WeekCard({ week, brand, onPress, currentWeek }) {
               backgroundColor: stageCol, borderRadius: 16,
               width: 32, height: 32, alignItems: "center", justifyContent: "center",
             }}>
-              <Text style={{ color: C.bg, fontFamily: MONO,
-                fontSize: 12, fontWeight: "bold" }}>
+              <Text style={{ color: C.bg, fontFamily: SANS_MED,
+                fontSize: 12 }}>
                 W{week.week}
               </Text>
             </View>
             <View>
-              <Text style={{ color: C.white, fontFamily: MONO,
-                fontSize: 13, fontWeight: "bold" }}>
+              <Text style={{ color: C.white, fontFamily: SANS_MED,
+                fontSize: 13 }}>
                 {week.stage}
               </Text>
               {isCurrent && (
-                <Text style={{ color: C.green, fontFamily: MONO, fontSize: 9 }}>
+                <Text style={{ color: C.greenBright, fontFamily: MONO, fontSize: 9 }}>
                   ◉ CURRENT WEEK
                 </Text>
               )}
             </View>
           </View>
           <View style={{ alignItems: "flex-end" }}>
-            <Text style={{ color: C.amber, fontFamily: MONO, fontSize: 12, fontWeight: "bold" }}>
+            <Text style={{ color: C.amber, fontFamily: SANS_MED, fontSize: 12 }}>
               EC {week.ec_min}–{week.ec_max}
             </Text>
             <Text style={{ color: C.blue, fontFamily: MONO, fontSize: 11 }}>
@@ -144,9 +149,9 @@ function WeekCard({ week, brand, onPress, currentWeek }) {
         {/* Generic NPK bars */}
         {brand === "generic" && (
           <View style={{ marginBottom: 8 }}>
-            <NPKBar label="N (Nitrogen)"   value={week.npk.n} colour="#39ff45" />
-            <NPKBar label="P (Phosphorus)" value={week.npk.p} colour="#ffb830" />
-            <NPKBar label="K (Potassium)"  value={week.npk.k} colour="#ff3a3a" />
+            <NPKBar label="N (Nitrogen)"   value={week.npk.n} colour={C.greenBright} />
+            <NPKBar label="P (Phosphorus)" value={week.npk.p} colour={C.amber} />
+            <NPKBar label="K (Potassium)"  value={week.npk.k} colour={C.red} />
           </View>
         )}
 
@@ -161,8 +166,8 @@ function WeekCard({ week, brand, onPress, currentWeek }) {
                   fontSize: 11, flex: 1 }}>
                   {product}
                 </Text>
-                <Text style={{ color: dose === "0" || dose.includes("PLAIN") ? C.grey : C.green,
-                  fontFamily: MONO, fontSize: 11, fontWeight: "bold" }}>
+                <Text style={{ color: dose === "0" || dose.includes("PLAIN") ? C.grey : C.greenBright,
+                  fontFamily: SANS_MED, fontSize: 11 }}>
                   {dose}
                 </Text>
               </View>
@@ -197,8 +202,8 @@ function WeekDetailModal({ week, brand, onClose }) {
             alignItems: "center", paddingHorizontal: 16, paddingBottom: 12,
             borderBottomWidth: 1, borderColor: C.border }}>
             <View>
-              <Text style={{ color: stageCol, fontFamily: MONO,
-                fontSize: 16, fontWeight: "bold" }}>
+              <Text style={{ color: stageCol, fontFamily: HEADING,
+                fontSize: 26, letterSpacing: 1.5 }}>
                 WEEK {week.week} — {week.stage.toUpperCase()}
               </Text>
               <Text style={{ color: C.grey, fontFamily: MONO, fontSize: 10 }}>
@@ -226,11 +231,11 @@ function WeekDetailModal({ week, brand, onClose }) {
               borderWidth: 1, borderColor: C.border, padding: 14, marginBottom: 12 }}>
               <Label style={{ marginBottom: 10 }}>NPK RATIO</Label>
               <NPKBar label="N — NITROGEN (growth, green, structure)"
-                value={week.npk.n} colour="#39ff45" />
+                value={week.npk.n} colour={C.greenBright} />
               <NPKBar label="P — PHOSPHORUS (roots, energy, flowering)"
-                value={week.npk.p} colour="#ffb830" />
+                value={week.npk.p} colour={C.amber} />
               <NPKBar label="K — POTASSIUM (flower density, resin, immune)"
-                value={week.npk.k} colour="#ff3a3a" />
+                value={week.npk.k} colour={C.red} />
               <Text style={{ color: C.grey, fontFamily: MONO, fontSize: 11,
                 marginTop: 8, lineHeight: 17 }}>
                 N, P, and K are the three main nutrients every plant needs. Like a human needing protein, carbs, and fat — plants need different ratios at different life stages.
@@ -242,8 +247,8 @@ function WeekDetailModal({ week, brand, onClose }) {
               <View style={{ flex: 1, backgroundColor: C.surface, borderRadius: 8,
                 borderWidth: 1, borderColor: C.border, padding: 12 }}>
                 <Label style={{ marginBottom: 6 }}>EC TARGET</Label>
-                <Text style={{ color: C.amber, fontFamily: MONO,
-                  fontSize: 22, fontWeight: "bold" }}>
+                <Text style={{ color: C.amber, fontFamily: HEADING,
+                  fontSize: 32 }}>
                   {week.ec_min}–{week.ec_max}
                 </Text>
                 <Text style={{ color: C.grey, fontFamily: MONO, fontSize: 10, marginTop: 4 }}>
@@ -253,8 +258,8 @@ function WeekDetailModal({ week, brand, onClose }) {
               <View style={{ flex: 1, backgroundColor: C.surface, borderRadius: 8,
                 borderWidth: 1, borderColor: C.border, padding: 12 }}>
                 <Label style={{ marginBottom: 6 }}>pH TARGET</Label>
-                <Text style={{ color: C.blue, fontFamily: MONO,
-                  fontSize: 22, fontWeight: "bold" }}>
+                <Text style={{ color: C.blue, fontFamily: HEADING,
+                  fontSize: 32 }}>
                   {week.ph_min}–{week.ph_max}
                 </Text>
                 <Text style={{ color: C.grey, fontFamily: MONO, fontSize: 10, marginTop: 4 }}>
@@ -283,11 +288,11 @@ function WeekDetailModal({ week, brand, onClose }) {
                     <View style={{
                       backgroundColor: dose === "0" || dose.includes("PLAIN") ? C.surface : C.greenFaint,
                       borderRadius: 4, borderWidth: 1,
-                      borderColor: dose === "0" || dose.includes("PLAIN") ? C.border : C.green,
+                      borderColor: dose === "0" || dose.includes("PLAIN") ? C.border : C.greenBright,
                       paddingHorizontal: 10, paddingVertical: 4,
                     }}>
-                      <Text style={{ color: dose === "0" || dose.includes("PLAIN") ? C.grey : C.green,
-                        fontFamily: MONO, fontSize: 12, fontWeight: "bold" }}>
+                      <Text style={{ color: dose === "0" || dose.includes("PLAIN") ? C.grey : C.greenBright,
+                        fontFamily: SANS_MED, fontSize: 12 }}>
                         {dose}
                       </Text>
                     </View>
@@ -361,12 +366,12 @@ export default function NutrientSchedule({ strainId, strainName, flowerWeeks, me
         backgroundColor: C.card,
       }}>
         <TouchableOpacity onPress={onBack} style={{ marginBottom: 8 }}>
-          <Text style={{ color: C.green, fontFamily: MONO, fontSize: 14 }}>← BACK</Text>
+          <Text style={{ color: C.greenBright, fontFamily: HEADING, fontSize: 16, letterSpacing: 1.5 }}>← BACK</Text>
         </TouchableOpacity>
-        <Text style={{ color: C.white, fontFamily: MONO, fontSize: 18, fontWeight: "bold" }}>
+        <Text style={{ color: C.white, fontFamily: HEADING, fontSize: 24, letterSpacing: 1 }}>
           {strainName}
         </Text>
-        <Text style={{ color: C.grey, fontFamily: MONO, fontSize: 11, marginTop: 2 }}>
+        <Text style={{ color: C.grey, fontFamily: SANS_MED, fontSize: 11, marginTop: 2 }}>
           NUTRIENT SCHEDULE · {medium.toUpperCase()} · {flowerWeeks}wk flower · {schedule?.total_weeks} weeks total
         </Text>
       </View>
@@ -380,13 +385,13 @@ export default function NutrientSchedule({ strainId, strainName, flowerWeeks, me
               style={{
                 paddingHorizontal: 14, paddingVertical: 8,
                 borderRadius: 8, borderWidth: 1,
-                borderColor: brand === b.key ? C.green : C.border,
+                borderColor: brand === b.key ? C.greenBright : C.border,
                 backgroundColor: brand === b.key ? C.greenFaint : C.surface,
                 flexDirection: "row", alignItems: "center", gap: 6,
               }}>
               <Text style={{ fontSize: 14 }}>{b.icon}</Text>
-              <Text style={{ color: brand === b.key ? C.green : C.greyLight,
-                fontFamily: MONO, fontSize: 11, fontWeight: brand === b.key ? "bold" : "normal" }}>
+              <Text style={{ color: brand === b.key ? C.greenBright : C.greyLight,
+                fontFamily: brand === b.key ? SANS_MED : MONO, fontSize: 11 }}>
                 {b.label}
               </Text>
             </TouchableOpacity>
@@ -402,7 +407,7 @@ export default function NutrientSchedule({ strainId, strainName, flowerWeeks, me
             padding: 10, flexDirection: "row", alignItems: "center", justifyContent: "space-between",
           }}>
           <View style={{ flex: 1 }}>
-            <Text style={{ color: C.green, fontFamily: MONO, fontSize: 11, fontWeight: "bold" }}>
+            <Text style={{ color: C.green, fontFamily: SANS_MED, fontSize: 11 }}>
               {currentBrandInfo.name} — {currentBrandInfo.type.toUpperCase()}
             </Text>
             <Text style={{ color: C.greenDim, fontFamily: MONO, fontSize: 10 }} numberOfLines={1}>
@@ -448,8 +453,8 @@ export default function NutrientSchedule({ strainId, strainName, flowerWeeks, me
               <View style={{ flexDirection: "row", justifyContent: "space-between",
                 alignItems: "center", paddingHorizontal: 16, paddingBottom: 12,
                 borderBottomWidth: 1, borderColor: C.border }}>
-                <Text style={{ color: C.green, fontFamily: MONO,
-                  fontSize: 16, fontWeight: "bold" }}>
+                <Text style={{ color: C.green, fontFamily: HEADING,
+                  fontSize: 20, letterSpacing: 1 }}>
                   {currentBrandInfo.name}
                 </Text>
                 <TouchableOpacity onPress={() => setShowBrandInfo(false)}>

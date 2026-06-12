@@ -16,24 +16,30 @@ import {
 import * as ImagePicker from "expo-image-picker";
 import * as FileSystem from "expo-file-system";
 
-const MONO = Platform.select({ ios: "Courier New", android: "monospace" });
+const HEADING   = "BebasNeue_400Regular";
+const SANS      = "SpaceGrotesk_400Regular";
+const SANS_MED  = "SpaceGrotesk_500Medium";
+const SANS_BOLD = "SpaceGrotesk_700Bold";
+const MONO      = SANS;
 const PHOTO_DIR = FileSystem.documentDirectory + "vyweed_photos/";
 const MAX_PHOTOS = 3;
 
 const C = {
-  bg:         "#070a07",
-  surface:    "#0d120d",
-  card:       "#111811",
-  border:     "#1a2a1a",
-  green:      "#39ff45",
-  greenFaint: "#0d3d12",
-  greenDim:   "#1a7a20",
-  amber:      "#ffb830",
-  red:        "#ff3a3a",
-  blue:       "#30d5ff",
-  white:      "#e8f0e8",
-  grey:       "#4a5a4a",
-  greyLight:  "#8a9a8a",
+  bg:          "#0a0f0a",
+  surface:     "#0f150f",
+  card:        "#141a13",
+  border:      "#2a3d2e",
+  green:       "#4d7358",
+  greenFaint:  "#1a2d1f",
+  greenDim:    "#3a5c44",
+  greenBright: "#6db87f",
+  amber:       "#c17a4a",
+  red:         "#a83030",
+  blue:        "#5b9bd5",
+  purple:      "#8b6abf",
+  white:       "#e8e4d9",
+  grey:        "#4a5a4a",
+  greyLight:   "#8a9e8c",
 };
 
 // ── Ensure photo directory exists ─────────────────────────────────────────────
@@ -107,20 +113,20 @@ function PhotoSourceModal({ visible, onSelect, onClose }) {
       <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.85)",
         justifyContent: "flex-end" }}>
         <View style={{ backgroundColor: C.card, borderTopLeftRadius: 20,
-          borderTopRightRadius: 20, borderTopWidth: 2, borderColor: C.green,
+          borderTopRightRadius: 20, borderTopWidth: 2, borderColor: C.greenBright,
           padding: 20, paddingBottom: 40 }}>
-          <Text style={{ color: C.white, fontFamily: MONO,
-            fontSize: 14, fontWeight: "bold", marginBottom: 16,
+          <Text style={{ color: C.white, fontFamily: HEADING,
+            fontSize: 14, letterSpacing: 2, marginBottom: 16,
             textAlign: "center" }}>
             ADD PHOTO
           </Text>
           <TouchableOpacity onPress={() => { onSelect("camera"); onClose(); }}
             style={{ backgroundColor: C.greenFaint, borderRadius: 10,
-              borderWidth: 1, borderColor: C.green, padding: 16,
+              borderWidth: 1, borderColor: C.greenBright, padding: 16,
               alignItems: "center", marginBottom: 10 }}>
             <Text style={{ fontSize: 28 }}>📷</Text>
-            <Text style={{ color: C.green, fontFamily: MONO,
-              fontSize: 14, fontWeight: "bold", marginTop: 6 }}>
+            <Text style={{ color: C.greenBright, fontFamily: HEADING,
+              fontSize: 14, letterSpacing: 2, marginTop: 6 }}>
               TAKE PHOTO
             </Text>
           </TouchableOpacity>
@@ -129,14 +135,14 @@ function PhotoSourceModal({ visible, onSelect, onClose }) {
               borderWidth: 1, borderColor: C.border, padding: 16,
               alignItems: "center", marginBottom: 10 }}>
             <Text style={{ fontSize: 28 }}>🖼</Text>
-            <Text style={{ color: C.white, fontFamily: MONO,
-              fontSize: 14, fontWeight: "bold", marginTop: 6 }}>
+            <Text style={{ color: C.white, fontFamily: HEADING,
+              fontSize: 14, letterSpacing: 2, marginTop: 6 }}>
               CHOOSE FROM GALLERY
             </Text>
           </TouchableOpacity>
           <TouchableOpacity onPress={onClose}
             style={{ padding: 12, alignItems: "center" }}>
-            <Text style={{ color: C.grey, fontFamily: MONO, fontSize: 13 }}>
+            <Text style={{ color: C.grey, fontFamily: HEADING, fontSize: 13, letterSpacing: 2 }}>
               CANCEL
             </Text>
           </TouchableOpacity>
@@ -179,8 +185,8 @@ function PhotoViewer({ uri, visible, onClose, onDelete }) {
               backgroundColor: "#3d0000", borderRadius: 8,
               borderWidth: 1, borderColor: C.red,
               paddingHorizontal: 24, paddingVertical: 12 }}>
-            <Text style={{ color: C.red, fontFamily: MONO,
-              fontSize: 13, fontWeight: "bold" }}>
+            <Text style={{ color: C.red, fontFamily: HEADING,
+              fontSize: 13, letterSpacing: 2 }}>
               🗑 DELETE PHOTO
             </Text>
           </TouchableOpacity>
@@ -209,7 +215,7 @@ export function PhotoStrip({ photos, onAdd, onRemove, loading }) {
           }}>
             <Image source={{ uri }}
               style={{ width: 80, height: 80, borderRadius: 8,
-                borderWidth: 2, borderColor: C.green }} />
+                borderWidth: 2, borderColor: C.greenBright }} />
           </TouchableOpacity>
         ))}
 
@@ -221,12 +227,12 @@ export function PhotoStrip({ photos, onAdd, onRemove, loading }) {
               backgroundColor: C.surface, alignItems: "center",
               justifyContent: "center" }}>
             {loading ? (
-              <ActivityIndicator color={C.green} />
+              <ActivityIndicator color={C.greenBright} />
             ) : (
               <>
-                <Text style={{ color: C.green, fontSize: 24 }}>+</Text>
-                <Text style={{ color: C.grey, fontFamily: MONO,
-                  fontSize: 8, marginTop: 2 }}>
+                <Text style={{ color: C.greenBright, fontSize: 24 }}>+</Text>
+                <Text style={{ color: C.grey, fontFamily: HEADING,
+                  fontSize: 8, letterSpacing: 2, marginTop: 2 }}>
                   PHOTO
                 </Text>
               </>
@@ -317,15 +323,15 @@ export default function PhotoJournal({ growId, strainName, logs, onBack }) {
         paddingTop: Platform.OS === "android" ? 16 : 52,
         paddingBottom: 12, borderBottomWidth: 1, borderColor: C.border }}>
         <TouchableOpacity onPress={onBack} style={{ marginBottom: 8 }}>
-          <Text style={{ color: C.green, fontFamily: MONO, fontSize: 14 }}>
+          <Text style={{ color: C.greenBright, fontFamily: HEADING, fontSize: 16, letterSpacing: 1.5 }}>
             ← BACK
           </Text>
         </TouchableOpacity>
-        <Text style={{ color: C.white, fontFamily: MONO,
-          fontSize: 18, fontWeight: "bold" }}>
+        <Text style={{ color: C.white, fontFamily: HEADING,
+          fontSize: 26, letterSpacing: 1 }}>
           {strainName}
         </Text>
-        <Text style={{ color: C.grey, fontFamily: MONO, fontSize: 11, marginTop: 2 }}>
+        <Text style={{ color: C.grey, fontFamily: SANS_MED, fontSize: 11, marginTop: 2 }}>
           PHOTO JOURNAL · {allPhotos.length} PHOTO{allPhotos.length !== 1 ? "S" : ""}
         </Text>
       </View>
@@ -334,11 +340,11 @@ export default function PhotoJournal({ growId, strainName, logs, onBack }) {
         <View style={{ flex: 1, alignItems: "center",
           justifyContent: "center", padding: 32 }}>
           <Text style={{ fontSize: 48 }}>📷</Text>
-          <Text style={{ color: C.green, fontFamily: MONO,
-            fontSize: 14, fontWeight: "bold", marginTop: 16 }}>
+          <Text style={{ color: C.greenBright, fontFamily: HEADING,
+            fontSize: 22, letterSpacing: 3, marginTop: 16 }}>
             NO PHOTOS YET
           </Text>
-          <Text style={{ color: C.grey, fontFamily: MONO,
+          <Text style={{ color: C.greyLight, fontFamily: SANS,
             fontSize: 12, marginTop: 8, textAlign: "center", lineHeight: 18 }}>
             Add photos when you do your daily check-in to build a visual diary of your grow.
           </Text>
@@ -360,8 +366,8 @@ export default function PhotoJournal({ growId, strainName, logs, onBack }) {
                 <View style={{ backgroundColor: C.greenFaint, borderRadius: 6,
                   borderWidth: 1, borderColor: C.greenDim,
                   paddingHorizontal: 10, paddingVertical: 4 }}>
-                  <Text style={{ color: C.green, fontFamily: MONO,
-                    fontSize: 12, fontWeight: "bold" }}>
+                  <Text style={{ color: C.greenBright, fontFamily: HEADING,
+                    fontSize: 12 }}>
                     {dayLabel}
                   </Text>
                 </View>
