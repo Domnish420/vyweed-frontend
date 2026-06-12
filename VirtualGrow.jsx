@@ -238,7 +238,7 @@ function PlantVisual({ day, totalDays, stage, strain, isHarvest, anim }) {
 }
 
 // ── Shelve animation modal ────────────────────────────────────────────────────
-function ShelveModal({ strain, metal, visible, onComplete }) {
+function ShelveModal({ strain, metal, visible, onComplete, onSkipAd }) {
   const scaleAnim = useRef(new Animated.Value(0)).current;
   const glowAnim  = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(60)).current;
@@ -295,20 +295,38 @@ function ShelveModal({ strain, metal, visible, onComplete }) {
           </Animated.View>
         </Animated.View>
 
-        <Animated.View style={{ marginTop: 44, opacity: glowAnim, alignItems: "center" }}>
+        <Animated.View style={{ marginTop: 44, opacity: glowAnim, alignItems: "center", paddingHorizontal: 24 }}>
           <Text style={{ color: m.colour, fontFamily: HEADING, fontSize: 32, letterSpacing: 4 }}>
             SHELVED
           </Text>
           <Text style={{ color: C.greyLight, fontFamily: SANS, fontSize: 13, marginTop: 6, textAlign: "center", lineHeight: 20 }}>
             {strain.name} has been added{"\n"}to your collection
           </Text>
-          <TouchableOpacity onPress={onComplete} style={{
-            marginTop: 28, backgroundColor: C.greenFaint,
-            borderWidth: 1, borderColor: C.green, borderRadius: 10,
-            paddingHorizontal: 36, paddingVertical: 14,
+
+          {/* Primary — skip the wait right now with an ad */}
+          <TouchableOpacity onPress={onSkipAd} style={{
+            marginTop: 24, width: 280,
+            backgroundColor: "rgba(193,122,74,0.12)",
+            borderWidth: 1.5, borderColor: `${C.amber}90`, borderRadius: 12,
+            paddingVertical: 16, alignItems: "center",
           }}>
-            <Text style={{ color: C.green, fontFamily: HEADING, fontSize: 20, letterSpacing: 2 }}>
-              VIEW COLLECTION →
+            <Text style={{ color: C.amber, fontFamily: HEADING, fontSize: 22, letterSpacing: 1 }}>
+              📺  SKIP WAIT WITH AD
+            </Text>
+            <Text style={{ color: `${C.amber}70`, fontFamily: SANS, fontSize: 11, marginTop: 3 }}>
+              Watch 30s · unlock your next strain now
+            </Text>
+          </TouchableOpacity>
+
+          {/* Secondary — start the timer and wait */}
+          <TouchableOpacity onPress={onComplete} style={{
+            marginTop: 10, width: 280,
+            backgroundColor: "rgba(255,255,255,0.03)",
+            borderWidth: 1, borderColor: C.border, borderRadius: 12,
+            paddingVertical: 14, alignItems: "center",
+          }}>
+            <Text style={{ color: C.greyLight, fontFamily: HEADING, fontSize: 18, letterSpacing: 1 }}>
+              START TIMER →
             </Text>
           </TouchableOpacity>
         </Animated.View>
@@ -1016,10 +1034,18 @@ export default function VirtualGrow() {
         strain={strain}
         metal={metal}
         visible={showShelve}
-        onComplete={() => {
-          saveTrophy();
+        onComplete={async () => {
+          await saveTrophy();   // saves trophy + starts timer → timerActive=true
+          setShowShelve(false); // modal closes, waiting screen appears automatically
+        }}
+        onSkipAd={async () => {
+          await saveTrophy();   // save trophy first
+          await skipTimer();    // immediately clear the timer with the ad
+          setTimerActive(false);
+          setTimerRemaining(0);
+          if (timerRef.current) clearInterval(timerRef.current);
           setShowShelve(false);
-          setScreen("collection");
+          loadNextStrain();     // load next strain right away
         }}
       />
     </View>
