@@ -10,7 +10,7 @@
 //   strainSeed      — strain ID (integer) — gives each strain its own unique shape
 
 import React, { useMemo } from "react";
-import Svg, { Path, G, Circle, Line } from "react-native-svg";
+import Svg, { Path, G, Circle, Line, Ellipse } from "react-native-svg";
 
 // ── Seeded deterministic RNG ──────────────────────────────────────────────────
 // Same seed always produces the same sequence — stable across re-renders
@@ -55,17 +55,28 @@ const LEAF_CONFIGS = [
   { a:  40, lr: 0.62, wr: 0.14 },
 ];
 
-function leafCluster(x, y, rot, size, fill, opacity = 0.88) {
+function leafCluster(x, y, rot, size, fill, opacity = 0.88, veinCol = null) {
   return (
     <G transform={`translate(${x.toFixed(1)} ${y.toFixed(1)}) rotate(${rot})`}>
-      {LEAF_CONFIGS.map((lc, i) => (
-        <G key={i} transform={`rotate(${lc.a})`}>
-          <Path
-            d={leafletD(size * lc.lr, size * lc.lr * lc.wr)}
-            fill={fill} opacity={opacity}
-          />
-        </G>
-      ))}
+      {LEAF_CONFIGS.map((lc, i) => {
+        const llen = size * lc.lr;
+        return (
+          <G key={i} transform={`rotate(${lc.a})`}>
+            <Path
+              d={leafletD(llen, llen * lc.wr)}
+              fill={fill} opacity={opacity}
+            />
+            {veinCol && (
+              <Line
+                x1="0" y1="0"
+                x2="0" y2={(-llen * 0.86).toFixed(1)}
+                stroke={veinCol} strokeWidth={0.55}
+                opacity={0.40} strokeLinecap="round"
+              />
+            )}
+          </G>
+        );
+      })}
     </G>
   );
 }
@@ -191,6 +202,7 @@ export default function PlantRenderer({
     const budCol    = lerpColor("#3a7848", "#523a70", sp.bud * 0.55);
     const budHiCol  = lerpColor("#52a85e", "#9268c0", sp.bud * 0.82);
     const pistilCol = sp.bud > 0.55 ? "#c87828" : "#f0e8d0";
+    const leafHiCol = lerpColor(leafCol, "#c8e8a0", 0.32);
 
     // ── Node + branch geometry ──
     const nodeCount  = isSeedling
@@ -313,7 +325,7 @@ export default function PlantRenderer({
     return {
       stemPath, stemCol,
       nodes, buds, budDots, triches, pistils,
-      leafCol, leafDkCol, budCol, budHiCol, pistilCol,
+      leafCol, leafDkCol, leafHiCol, budCol, budHiCol, pistilCol,
       isSeedling, cotyPos,
     };
   }, [stage, strainType, tier, strainSeed, width, height, day, totalDays]);
@@ -321,12 +333,16 @@ export default function PlantRenderer({
   const {
     stemPath, stemCol,
     nodes, budDots, triches, pistils,
-    leafCol, leafDkCol, budCol, budHiCol, pistilCol,
+    leafCol, leafDkCol, leafHiCol, budCol, budHiCol, pistilCol,
     isSeedling, cotyPos,
   } = geo;
 
   return (
     <Svg width={width} height={height}>
+
+      {/* ── Ground shadow — stacked ellipses simulate soft drop shadow ── */}
+      <Ellipse cx={(width/2).toFixed(1)} cy={(height-6).toFixed(1)} rx={(width*0.30).toFixed(1)} ry="5.5" fill="rgba(0,0,0,0.20)" />
+      <Ellipse cx={(width/2).toFixed(1)} cy={(height-6).toFixed(1)} rx={(width*0.19).toFixed(1)} ry="3.5" fill="rgba(0,0,0,0.15)" />
 
       {/* ── Substrate / pot hint ── */}
       <Path
@@ -337,6 +353,17 @@ export default function PlantRenderer({
         d={`M ${(width*0.23).toFixed(0)} ${(height-11).toFixed(0)} Q ${(width/2).toFixed(0)} ${(height-4).toFixed(0)} ${(width*0.77).toFixed(0)} ${(height-11).toFixed(0)}`}
         stroke="rgba(100,65,28,0.55)" strokeWidth="2" fill="none"
       />
+
+      {/* ── Branch + stem cast shadows — offset duplicate for depth ── */}
+      <G transform="translate(1.5, 2.5)">
+        {nodes.map((n, i) => (
+          <G key={`brs${i}`}>
+            <Path d={n.pathL} stroke="rgba(0,0,0,0.17)" strokeWidth={2.4} fill="none" strokeLinecap="round" />
+            <Path d={n.pathR} stroke="rgba(0,0,0,0.17)" strokeWidth={2.4} fill="none" strokeLinecap="round" />
+          </G>
+        ))}
+        <Path d={stemPath} stroke="rgba(0,0,0,0.17)" strokeWidth={3.8} fill="none" strokeLinecap="round" />
+      </G>
 
       {/* ── Branches (under leaves) ── */}
       {nodes.map((n, i) => (
@@ -351,21 +378,23 @@ export default function PlantRenderer({
 
       {/* ── Seedling: two simple cotyledon leaves ── */}
       {isSeedling && cotyPos && <>
-        {leafCluster(cotyPos.x - 7, cotyPos.y, -130, 9, "#b8d880")}
-        {leafCluster(cotyPos.x + 7, cotyPos.y, -50,  9, "#b8d880")}
+        {leafCluster(cotyPos.x - 7, cotyPos.y, -130, 9, "#b8d880", 0.88, "#d0f5b0")}
+        {leafCluster(cotyPos.x + 7, cotyPos.y, -50,  9, "#b8d880", 0.88, "#d0f5b0")}
       </>}
 
       {/* ── Compound fan leaves at each node ── */}
       {!isSeedling && nodes.map((n, i) => (
         <G key={`lv${i}`}>
-          {leafCluster(n.tipL.x, n.tipL.y, -108, n.leafSz, leafCol)}
-          {leafCluster(n.tipR.x, n.tipR.y,  -72, n.leafSz, leafCol)}
+          {leafCluster(n.tipL.x, n.tipL.y, -108, n.leafSz, leafCol, 0.88, leafHiCol)}
+          {leafCluster(n.tipR.x, n.tipR.y,  -72, n.leafSz, leafCol, 0.88, leafHiCol)}
           {/* Node leaf on the stem itself */}
           {i < nodes.length - 2 && leafCluster(
             n.pos.x, n.pos.y,
             -90 + (i % 2 === 0 ? 14 : -14),
             n.leafSz * 1.1,
             leafDkCol,
+            0.88,
+            leafHiCol,
           )}
         </G>
       ))}
@@ -381,11 +410,29 @@ export default function PlantRenderer({
       ))}
 
       {/* ── Bud clusters ── */}
+      {/* AO rings give each bud dot a dark halo for roundness */}
+      {budDots.map((dot, i) => (
+        <Circle
+          key={`bao${i}`}
+          cx={dot.cx.toFixed(1)} cy={dot.cy.toFixed(1)} r={(dot.r * 1.22).toFixed(1)}
+          fill="rgba(0,0,0,0.22)"
+        />
+      ))}
       {budDots.map((dot, i) => (
         <Circle
           key={`bd${i}`}
           cx={dot.cx.toFixed(1)} cy={dot.cy.toFixed(1)} r={dot.r.toFixed(1)}
           fill={dot.hi ? budHiCol : budCol} opacity={0.90}
+        />
+      ))}
+      {/* Specular highlights — light source upper-left, makes buds look spherical */}
+      {budDots.map((dot, i) => (
+        <Circle
+          key={`bsp${i}`}
+          cx={(dot.cx - dot.r * 0.25).toFixed(1)}
+          cy={(dot.cy - dot.r * 0.30).toFixed(1)}
+          r={(dot.r * 0.28).toFixed(1)}
+          fill="rgba(255,255,255,0.20)"
         />
       ))}
 
