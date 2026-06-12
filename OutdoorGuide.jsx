@@ -11,7 +11,8 @@ import {
 } from "react-native";
 import * as Location from "expo-location";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import RTLGrow from "./RTLGrow";
+import RTLGrow  from "./RTLGrow";
+import GrowRoom from "./GrowRoom";
 
 const MONO   = Platform.select({ ios: "Courier New", android: "monospace" });
 const HEADING = "BebasNeue_400Regular";
@@ -201,45 +202,45 @@ function buildGrowverContext({ city, country, lat, lon, weather, daylightHours, 
   };
 }
 
-// ── WEATHER / GREENHOUSE mode toggle ─────────────────────────────────────────
+// ── WEATHER / GREENHOUSE / GROW ROOM toggle ──────────────────────────────────
+const MODES = [
+  { key: "weather",   label: "🌤 WEATHER",    activeColor: C.green,     activeBg: "#0d3d12",   activeBorder: C.greenDim },
+  { key: "greenhouse",label: "🏡 GREENHOUSE", activeColor: GC.green,    activeBg: GC.greenFaint, activeBorder: GC.greenDim },
+  { key: "growroom",  label: "🏠 GROW ROOM",  activeColor: "#c8b4e8",   activeBg: "rgba(200,180,232,0.08)", activeBorder: "rgba(200,180,232,0.30)" },
+];
+
 function ModeToggle({ view, setView }) {
   return (
-    <View style={{ flexDirection: "row", gap: 8, marginTop: 10 }}>
-      {[
-        { key: "weather",    label: "🌤 WEATHER" },
-        { key: "greenhouse", label: "🏡 GREENHOUSE" },
-      ].map(({ key, label }) => (
-        <TouchableOpacity
-          key={key}
-          onPress={() => setView(key)}
-          style={{
-            flex: 1, paddingVertical: 9, borderRadius: 10,
-            backgroundColor: key === "greenhouse"
-              ? (view === key ? GC.greenFaint : "rgba(255,255,255,0.02)")
-              : (view === key ? "#0d3d12" : "rgba(255,255,255,0.02)"),
-            borderWidth: 1,
-            borderColor: key === "greenhouse"
-              ? (view === key ? GC.greenDim : "rgba(255,255,255,0.06)")
-              : (view === key ? C.greenDim : "#1a2a1a"),
-            alignItems: "center",
-          }}>
-          <Text style={{
-            color: key === "greenhouse"
-              ? (view === key ? GC.green : "rgba(232,228,217,0.30)")
-              : (view === key ? C.green : C.grey),
-            fontFamily: HEADING, fontSize: 14, letterSpacing: 1,
-          }}>
-            {label}
-          </Text>
-        </TouchableOpacity>
-      ))}
+    <View style={{ flexDirection: "row", gap: 6, marginTop: 10 }}>
+      {MODES.map(({ key, label, activeColor, activeBg, activeBorder }) => {
+        const isActive = view === key;
+        return (
+          <TouchableOpacity
+            key={key}
+            onPress={() => setView(key)}
+            style={{
+              flex: 1, paddingVertical: 8, borderRadius: 10,
+              backgroundColor: isActive ? activeBg : "rgba(255,255,255,0.02)",
+              borderWidth: 1,
+              borderColor: isActive ? activeBorder : "#1a2a1a",
+              alignItems: "center",
+            }}>
+            <Text style={{
+              color: isActive ? activeColor : C.grey,
+              fontFamily: HEADING, fontSize: 11, letterSpacing: 0.5,
+            }}>
+              {label}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
     </View>
   );
 }
 
 // ── Main Screen ────────────────────────────────────────────────────────────────
 export default function OutdoorGuide({ trophies, onAddTrophy, tokens, onEarnToken, onSpendToken }) {
-  const [view, setView]                 = useState("weather"); // "weather" | "greenhouse"
+  const [view, setView]                 = useState("weather"); // "weather" | "greenhouse" | "growroom"
   const [location, setLocation]         = useState(null);
   const [locationName, setLocationName] = useState(null);
   const [weather, setWeather]           = useState(null);
@@ -354,6 +355,51 @@ export default function OutdoorGuide({ trophies, onAddTrophy, tokens, onEarnToke
         </View>
 
         <RTLGrow
+          trophies={trophies}
+          onAddTrophy={onAddTrophy}
+          tokens={tokens}
+          onEarnToken={onEarnToken}
+          onSpendToken={onSpendToken}
+        />
+      </View>
+    );
+  }
+
+  // ── Grow room mode ───────────────────────────────────────────────────────────
+  if (view === "growroom") {
+    return (
+      <View style={{ flex: 1, backgroundColor: "#0B0D0C" }}>
+        <View style={{
+          paddingHorizontal: 16,
+          paddingTop: Platform.OS === "android" ? (StatusBar.currentHeight || 24) + 12 : 52,
+          paddingBottom: 14, borderBottomWidth: 1,
+          borderColor: "rgba(255,255,255,0.08)",
+          backgroundColor: "#0B0D0C",
+        }}>
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end" }}>
+            <View>
+              <Text style={{ color: "#e8e4d9", fontFamily: HEADING, fontSize: 36, letterSpacing: 3 }}>
+                VY<Text style={{ color: "#3dffa0" }}>WEED</Text>
+              </Text>
+              <Text style={{ color: "rgba(232,228,217,0.52)", fontFamily: SANS, fontSize: 10, letterSpacing: 2 }}>
+                GROW ROOM · INDOOR
+              </Text>
+            </View>
+            <View style={{
+              backgroundColor: "rgba(200,180,232,0.08)",
+              borderRadius: 20, borderWidth: 1, borderColor: "rgba(200,180,232,0.30)",
+              paddingHorizontal: 12, paddingVertical: 6,
+              flexDirection: "row", alignItems: "center", gap: 5,
+            }}>
+              <Text style={{ color: "#c8b4e8", fontFamily: HEADING, fontSize: 18 }}>{tokens ?? 0}</Text>
+              <Text style={{ fontSize: 16 }}>🎟</Text>
+            </View>
+          </View>
+          <ModeToggle view={view} setView={setView} />
+        </View>
+
+        <GrowRoom
+          trophies={trophies}
           onAddTrophy={onAddTrophy}
           tokens={tokens}
           onEarnToken={onEarnToken}

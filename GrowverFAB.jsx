@@ -38,6 +38,26 @@ function buildSystemMessage(screen, screenCtx, outdoorCtx) {
       );
     }
 
+    // Grow room mode — indoor, fully controlled
+    if (ctxScreen === "growroom" && d?.strainName) {
+      const targetsLine = d.targets
+        ? `\nIdeal conditions: ${d.targets.temp} · ${d.targets.rh} RH · ${d.targets.light} light\nNote: ${d.targets.note}`
+        : "";
+      return (
+        base +
+        `The user is in their INDOOR GROW ROOM — a controlled environment with no weather dependency.\n` +
+        `Strain: ${d.strainName} (${d.tier}, ${d.difficulty}, up to ${d.thcMax}% THC)\n` +
+        `Aroma: ${d.aroma}\n` +
+        `Day: ${d.day} of ${d.totalDays} · Stage: ${d.stage}\n` +
+        `What's happening: ${d.stageDesc}\n` +
+        `Grower tip: ${d.tip}\n` +
+        (d.isHarvest ? "Status: HARVEST READY\n" : "") +
+        (d.nextDayIn ? `Next grow day in: ${d.nextDayIn}\n` : "") +
+        targetsLine +
+        `\n\nGive indoor-specific advice. Reference tent conditions, lighting, pH, EC, and airflow as relevant to this exact stage.`
+      );
+    }
+
     // Greenhouse mode — plant context takes priority, weather appended if available
     if (ctxScreen === "greenhouse" && d?.strainName) {
       const weatherPart = outdoorCtx
@@ -435,11 +455,12 @@ export default function GrowverFAB({ screen, onOpenFull }) {
 
               {/* Context indicator — shows what Growver knows about this screen */}
               {(screen === "outdoor"
-                  ? (screenCtxRef.current?.screen === "greenhouse" || screenCtxRef.current?.screen === "seed_tray" || weatherCtx.current)
+                  ? (screenCtxRef.current?.screen === "greenhouse" || screenCtxRef.current?.screen === "growroom" || screenCtxRef.current?.screen === "seed_tray" || weatherCtx.current)
                   : screenCtxRef.current?.data) && (
                 <View style={{ backgroundColor: "#0a1a0a", borderBottomWidth: 1, borderColor: C.border, paddingHorizontal: 14, paddingVertical: 7, flexDirection: "row", alignItems: "center", gap: 6 }}>
                   <Text style={{ fontSize: 11 }}>
                     {screen === "outdoor" && screenCtxRef.current?.screen === "seed_tray" ? "🌱"
+                      : screen === "outdoor" && screenCtxRef.current?.screen === "growroom" ? "🏠"
                       : screen === "outdoor" && screenCtxRef.current?.screen === "greenhouse" ? "🏡"
                       : screen === "outdoor" ? "🌤"
                       : screen === "browse" ? "🌿"
@@ -449,6 +470,8 @@ export default function GrowverFAB({ screen, onOpenFull }) {
                   <Text style={{ color: C.greenDim, fontFamily: MONO, fontSize: 10 }}>
                     {screen === "outdoor" && screenCtxRef.current?.screen === "seed_tray" && screenCtxRef.current?.data?.seeds?.length > 0
                       ? `Seed tray · ${screenCtxRef.current.data.seeds.length} seeds · ${screenCtxRef.current.data.rerollsLeft} re-rolls left`
+                      : screen === "outdoor" && screenCtxRef.current?.screen === "growroom" && screenCtxRef.current?.data?.strainName
+                      ? `Grow room: ${screenCtxRef.current.data.strainName} · Day ${screenCtxRef.current.data.day} · ${screenCtxRef.current.data.stage}`
                       : screen === "outdoor" && screenCtxRef.current?.screen === "greenhouse" && screenCtxRef.current?.data?.strainName
                       ? `Greenhouse: ${screenCtxRef.current.data.strainName} · Day ${screenCtxRef.current.data.day} · ${screenCtxRef.current.data.stage}`
                       : screen === "outdoor" && weatherCtx.current
