@@ -581,7 +581,7 @@ function GrowHero({ strainName, stage, day, medium, startDate, logCount,
         {/* Nav bar — back + critical badge + check-in */}
         <View style={{
           position: "absolute", top: 0, left: 0, right: 0,
-          paddingTop: Platform.OS === "android" ? 14 : 50,
+          paddingTop: Platform.OS === "android" ? (StatusBar.currentHeight || 24) + 16 : 50,
           paddingHorizontal: 16,
           flexDirection: "row", alignItems: "center", justifyContent: "space-between",
         }}>

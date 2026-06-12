@@ -14,7 +14,7 @@
 import React, { useState, useEffect } from "react";
 import {
   View, Text, ScrollView, TouchableOpacity,
-  ActivityIndicator, Modal, Platform, Alert,
+  ActivityIndicator, Modal, Platform, Alert, StatusBar,
 } from "react-native";
 
 import { getApiV1, BACKEND_HEADERS } from "./apiConfig";
@@ -360,7 +360,7 @@ export default function NutrientSchedule({ strainId, strainName, flowerWeeks, me
       {/* Header */}
       <View style={{
         paddingHorizontal: 16,
-        paddingTop: Platform.OS === "android" ? 16 : 52,
+        paddingTop: Platform.OS === "android" ? (StatusBar.currentHeight || 24) + 12 : 52,
         paddingBottom: 12,
         borderBottomWidth: 1, borderColor: C.border,
         backgroundColor: C.card,

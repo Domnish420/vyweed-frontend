@@ -14,7 +14,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import {
   View, Text, ScrollView, TouchableOpacity,
-  ActivityIndicator, Platform, Dimensions, Modal, Alert,
+  ActivityIndicator, Platform, Dimensions, Modal, Alert, StatusBar,
 } from "react-native";
 import Svg, { Line, Polyline, Circle, Rect, Text as SvgText } from "react-native-svg";
 
@@ -334,7 +334,7 @@ export default function GrowTimeline({ growId, strainName, onBack }) {
     <View style={{ flex: 1, backgroundColor: C.bg }}>
       {/* Header */}
       <View style={{ paddingHorizontal: 16,
-        paddingTop: Platform.OS === "android" ? 16 : 52, paddingBottom: 12,
+        paddingTop: Platform.OS === "android" ? (StatusBar.currentHeight || 24) + 12 : 52, paddingBottom: 12,
         borderBottomWidth: 1, borderColor: C.border, backgroundColor: C.card }}>
         <TouchableOpacity onPress={onBack} style={{ marginBottom: 8 }}>
           <Text style={{ color: C.greenBright, fontFamily: HEADING, fontSize: 16, letterSpacing: 1.5 }}>← BACK</Text>

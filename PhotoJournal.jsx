@@ -11,7 +11,7 @@
 import React, { useState, useEffect } from "react";
 import {
   View, Text, TouchableOpacity, Image, Modal,
-  ScrollView, Alert, Platform, ActivityIndicator,
+  ScrollView, Alert, Platform, ActivityIndicator, StatusBar,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import * as FileSystem from "expo-file-system";
@@ -320,7 +320,7 @@ export default function PhotoJournal({ growId, strainName, logs, onBack }) {
     <View style={{ flex: 1, backgroundColor: C.bg }}>
       {/* Header */}
       <View style={{ paddingHorizontal: 16,
-        paddingTop: Platform.OS === "android" ? 16 : 52,
+        paddingTop: Platform.OS === "android" ? (StatusBar.currentHeight || 24) + 12 : 52,
         paddingBottom: 12, borderBottomWidth: 1, borderColor: C.border }}>
         <TouchableOpacity onPress={onBack} style={{ marginBottom: 8 }}>
           <Text style={{ color: C.greenBright, fontFamily: HEADING, fontSize: 16, letterSpacing: 1.5 }}>
