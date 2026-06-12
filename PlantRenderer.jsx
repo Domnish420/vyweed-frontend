@@ -159,14 +159,15 @@ const STAGE_DAY_EST = {
 
 // ── Main component ────────────────────────────────────────────────────────────
 export default function PlantRenderer({
-  width      = 260,
-  height     = 290,
-  stage      = "Seedling",
-  strainType = "H",
-  tier       = "T4",
-  strainSeed = 1,
-  day        = null,
-  totalDays  = null,
+  width       = 260,
+  height      = 290,
+  stage       = "Seedling",
+  strainType  = "H",
+  tier        = "T4",
+  strainSeed  = 1,
+  day         = null,
+  totalDays   = null,
+  stressLevel = 0,
 }) {
   const geo = useMemo(() => {
     const rng   = makeRng(strainSeed | 0);           // structural identity RNG
@@ -209,6 +210,13 @@ export default function PlantRenderer({
     const budHiCol  = lerpColor("#52a85e", "#9268c0", sp.bud * 0.82);
     const pistilCol = sp.bud > 0.55 ? "#c87828" : "#f0e8d0";
     const leafHiCol = lerpColor(leafCol, "#c8e8a0", 0.32);
+
+    const sl         = Math.min(Math.max(stressLevel, 0), 1);
+    const leafColF   = lerpColor(leafCol,   "#c8a820", sl * 0.78);
+    const leafDkColF = lerpColor(leafDkCol, "#9a7e10", sl * 0.78);
+    const leafHiColF = lerpColor(leafHiCol, "#d4b830", sl * 0.6);
+    const budColF    = lerpColor(budCol,    "#7a6210", sl * 0.55);
+    const budHiColF  = lerpColor(budHiCol,  "#b09430", sl * 0.55);
 
     // ── Node + branch geometry ──
     const nodeCount  = isSeedling
@@ -322,6 +330,23 @@ export default function PlantRenderer({
       });
     }
 
+    // ── Stress spots — brown lesions appearing on leaves under stress ──
+    const stressSpots = [];
+    if (sl > 0.30) {
+      const ssrng = makeRng((strainSeed | 0) * 333 + 7);
+      const count = Math.floor(sl * 12);
+      nodes.forEach((n, ni) => {
+        if (ni % 2 === 0 && stressSpots.length < count) {
+          stressSpots.push({
+            cx: n.tipL.x + (ssrng() - 0.5) * 10,
+            cy: n.tipL.y + (ssrng() - 0.5) * 10,
+            r: 2.5 + ssrng() * 3,
+            o: 0.4 + ssrng() * 0.35,
+          });
+        }
+      });
+    }
+
     // ── Seedling cotyledon positions ──
     const cotyPos = isSeedling ? stemAt(0.85) : null;
 
@@ -331,16 +356,16 @@ export default function PlantRenderer({
     return {
       stemPath, stemCol,
       nodes, buds, budDots, triches, pistils,
-      leafCol, leafDkCol, leafHiCol, budCol, budHiCol, pistilCol,
-      isSeedling, cotyPos,
+      leafColF, leafDkColF, leafHiColF, budColF, budHiColF, pistilCol,
+      isSeedling, cotyPos, sl, stressSpots,
     };
-  }, [stage, strainType, tier, strainSeed, width, height, day, totalDays]);
+  }, [stage, strainType, tier, strainSeed, width, height, day, totalDays, stressLevel]);
 
   const {
     stemPath, stemCol,
     nodes, budDots, triches, pistils,
-    leafCol, leafDkCol, leafHiCol, budCol, budHiCol, pistilCol,
-    isSeedling, cotyPos,
+    leafColF, leafDkColF, leafHiColF, budColF, budHiColF, pistilCol,
+    isSeedling, cotyPos, sl, stressSpots,
   } = geo;
 
   return (
@@ -391,16 +416,16 @@ export default function PlantRenderer({
       {/* ── Compound fan leaves at each node ── */}
       {!isSeedling && nodes.map((n, i) => (
         <G key={`lv${i}`}>
-          {leafCluster(n.tipL.x, n.tipL.y, -108, n.leafSz, leafCol, 0.88, leafHiCol)}
-          {leafCluster(n.tipR.x, n.tipR.y,  -72, n.leafSz, leafCol, 0.88, leafHiCol)}
+          {leafCluster(n.tipL.x, n.tipL.y, -108, n.leafSz, leafColF, 0.88, leafHiColF)}
+          {leafCluster(n.tipR.x, n.tipR.y,  -72, n.leafSz, leafColF, 0.88, leafHiColF)}
           {/* Node leaf on the stem itself */}
           {i < nodes.length - 2 && leafCluster(
             n.pos.x, n.pos.y,
             -90 + (i % 2 === 0 ? 14 : -14),
             n.leafSz * 1.1,
-            leafDkCol,
+            leafDkColF,
             0.88,
-            leafHiCol,
+            leafHiColF,
           )}
         </G>
       ))}
@@ -428,7 +453,7 @@ export default function PlantRenderer({
         <Circle
           key={`bd${i}`}
           cx={dot.cx.toFixed(1)} cy={dot.cy.toFixed(1)} r={dot.r.toFixed(1)}
-          fill={dot.hi ? budHiCol : budCol} opacity={0.90}
+          fill={dot.hi ? budHiColF : budColF} opacity={0.90}
         />
       ))}
       {/* Specular highlights — light source upper-left, makes buds look spherical */}
@@ -448,6 +473,15 @@ export default function PlantRenderer({
           key={`tr${i}`}
           cx={t.cx.toFixed(1)} cy={t.cy.toFixed(1)} r={t.r.toFixed(1)}
           fill="white" opacity={t.o}
+        />
+      ))}
+
+      {/* Stress spots — visible leaf damage at stressLevel > 0.3 */}
+      {stressSpots.map((s, i) => (
+        <Circle
+          key={`ss${i}`}
+          cx={s.cx.toFixed(1)} cy={s.cy.toFixed(1)} r={s.r.toFixed(1)}
+          fill="#8a5010" opacity={s.o}
         />
       ))}
 

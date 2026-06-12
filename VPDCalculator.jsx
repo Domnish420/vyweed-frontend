@@ -2,7 +2,7 @@
  * VPDCalculator.jsx
  * Real-time VPD calculator + interactive scenario simulator.
  * CALC tab — live VPD readout with +/- controls.
- * SIMULATE tab — interactive heatmap grid, plant-state panel, scenario bank.
+ * SIMULATE tab — interactive plant simulator with health model + day log.
  */
 
 import React, { useState, useMemo, useEffect } from "react";
@@ -11,6 +11,7 @@ import {
   View, Text, ScrollView, TouchableOpacity,
   Platform, Dimensions, Modal,
 } from "react-native";
+import PlantRenderer from "./PlantRenderer";
 
 const { width: SW } = Dimensions.get("window");
 
@@ -61,6 +62,104 @@ function vpdStatus(vpd, stage) {
   if (dist <= 0.1) return { status: "ideal", colour: C.green, label: "PERFECT ✓" };
   return               { status: "ok",    colour: C.amber, label: "ACCEPTABLE" };
 }
+
+// ── Health model functions ────────────────────────────────────────────────────
+function calcVpdFactor(vpd, stage) {
+  const t = STAGE_TARGETS[stage] || STAGE_TARGETS.Vegetative;
+  if (vpd < t.lo * 0.5) return 0.20;
+  if (vpd < t.lo)        return 0.55 + 0.45 * (vpd / t.lo);
+  if (vpd <= t.hi)       return 1.00;
+  if (vpd <= t.hi * 1.3) return 0.72;
+  if (vpd <= 2.0)        return 0.42;
+  return 0.12;
+}
+function calcTempFactor(t) {
+  if (t < 14)  return 0.10;
+  if (t < 18)  return 0.50;
+  if (t <= 28) return 1.00;
+  if (t <= 31) return 0.65;
+  if (t <= 34) return 0.35;
+  return 0.12;
+}
+const NUTRIENT_FACTOR = { low: 0.68, med: 1.00, high: 0.80, toxic: 0.28 };
+const WATER_FACTOR    = { dry: 0.48, ok: 1.00, over: 0.62 };
+
+function calcDayHealth(temp, rh, stage, nutrients, water) {
+  const vpd = calcVPD(temp, rh);
+  return calcVpdFactor(vpd, stage)
+    * calcTempFactor(temp)
+    * (NUTRIENT_FACTOR[nutrients] ?? 1)
+    * (WATER_FACTOR[water] ?? 1);
+}
+
+function getSymptoms(health, temp, vpd, stage, nutrients, water) {
+  const t = STAGE_TARGETS[stage] || STAGE_TARGETS.Vegetative;
+  const s = [];
+  if (vpd < t.lo * 0.5)    s.push("Stomata closed — zero nutrient transport");
+  else if (vpd < t.lo)     s.push("Low VPD — sluggish transpiration");
+  else if (vpd > 2.0)      s.push("Emergency shutdown — stomata sealed");
+  else if (vpd > t.hi * 1.3) s.push("VPD critical — severe leaf tacoing");
+  else if (vpd > t.hi)     s.push("VPD high — plant working overtime");
+  if (temp > 32)           s.push("Heat stress — bleaching + tip burn");
+  else if (temp > 29)      s.push("Warm stress — tip burn risk");
+  else if (temp < 16)      s.push("Cold stress — root zone stalled");
+  else if (temp < 18)      s.push("Cool temps — reduced metabolism");
+  if (nutrients === "toxic") s.push("Nute toxicity — burn across all leaves");
+  else if (nutrients === "high") s.push("Overfeeding — tip burn developing");
+  else if (nutrients === "low")  s.push("Underfeeding — pale interveinal chlorosis");
+  if (water === "dry")     s.push("Drought stress — wilting, stomata shut");
+  else if (water === "over") s.push("Overwatering — root hypoxia, yellowing");
+  if (health < 0.30)       s.push("Severe stress — growth fully halted");
+  else if (health < 0.55)  s.push("Moderate stress — yield impact certain");
+  if (s.length === 0)      s.push("Plant is healthy and thriving");
+  return s;
+}
+
+function getPreventionTips(temp, vpd, stage, nutrients, water) {
+  const t = STAGE_TARGETS[stage] || STAGE_TARGETS.Vegetative;
+  const tips = [];
+  if (vpd > t.hi)          tips.push("Lower temp or raise RH to reduce VPD");
+  else if (vpd < t.lo)     tips.push("Raise temp or lower RH to increase VPD");
+  if (temp > 28)           tips.push(`Reduce temp to 24–26°C (you are ${(temp-26).toFixed(0)}°C over)`);
+  else if (temp < 18)      tips.push(`Raise temp to 20–26°C (you are ${(18-temp).toFixed(0)}°C under)`);
+  if (nutrients === "toxic") tips.push("Flush medium with plain pH water — 3× pot volume");
+  else if (nutrients === "high") tips.push("Reduce feed concentration by 25–30%");
+  else if (nutrients === "low")  tips.push("Step up feed — work toward full strength");
+  if (water === "dry")     tips.push("Water now — check medium every 12–24h");
+  else if (water === "over") tips.push("Let medium dry out — 30% weight loss before next water");
+  if (tips.length === 0)   tips.push("Conditions are optimal — maintain these parameters");
+  return tips;
+}
+
+function runSimulation(days, temp, rh, stage, nutrients, water) {
+  let health = 1.0;
+  const log = [];
+  for (let d = 1; d <= days; d++) {
+    const target = calcDayHealth(temp, rh, stage, nutrients, water);
+    health = health + (target - health) * 0.28;
+    health = Math.max(0.02, Math.min(1.0, health));
+    const vpd = calcVPD(temp, rh);
+    log.push({
+      day: d,
+      health: Math.round(health * 100),
+      vpd: vpd.toFixed(2),
+      symptoms: getSymptoms(health, temp, vpd, stage, nutrients, water),
+    });
+  }
+  return log;
+}
+
+// ── Scenario bank ─────────────────────────────────────────────────────────────
+const SCENARIOS = [
+  { name: "HEAT WAVE",       icon: "🔥", temp: 33, rh: 38, light: "12", nutrients: "med",   water: "dry",  desc: "AC fails — heat + drought combo" },
+  { name: "COLD SNAP",       icon: "❄️", temp: 16, rh: 84, light: "12", nutrients: "med",   water: "ok",   desc: "Heating cuts out overnight" },
+  { name: "HUMIDITY CRISIS", icon: "💧", temp: 24, rh: 78, light: "12", nutrients: "med",   water: "over", desc: "Dehumidifier fails in flower" },
+  { name: "PERFECT VEG",     icon: "🍃", temp: 24, rh: 62, light: "18", nutrients: "med",   water: "ok",   desc: "Dialled vegetative environment" },
+  { name: "PERFECT FLOWER",  icon: "🌺", temp: 26, rh: 50, light: "12", nutrients: "med",   water: "ok",   desc: "Optimal mid-flower conditions" },
+  { name: "LATE FLOWER",     icon: "💎", temp: 27, rh: 44, light: "12", nutrients: "low",   water: "ok",   desc: "Resin push — final 2 weeks" },
+  { name: "OVERFEEDING",     icon: "☠️", temp: 24, rh: 58, light: "18", nutrients: "toxic", water: "ok",   desc: "Nute toxicity — beginner trap" },
+  { name: "ROOT DROWN",      icon: "🌊", temp: 22, rh: 65, light: "18", nutrients: "med",   water: "over", desc: "Overwatering — anaerobic roots" },
+];
 
 // ── Plant state data per VPD band ─────────────────────────────────────────────
 const VPD_PLANT_STATES = [
@@ -120,42 +219,6 @@ const VPD_PLANT_STATES = [
     fix:          ["Lower temperature IMMEDIATELY — raise lights, add cooling", "Raise humidity 10–15% right now", "Check roots are not dehydrated (heat above 26°C dries medium fast)", "Remove lollipop lower growth to reduce plant's total transpiration load", "Do not feed until stress resolves"],
   },
 ];
-
-function getPlantState(vpd) {
-  return VPD_PLANT_STATES.find(s => vpd >= s.range[0] && vpd < s.range[1])
-    || VPD_PLANT_STATES[VPD_PLANT_STATES.length - 1];
-}
-
-// ── Scenario bank ─────────────────────────────────────────────────────────────
-const SCENARIOS = [
-  { name: "HEAT WAVE",         icon: "🔥", temp: 33, rh: 38, desc: "Summer: AC fails mid-day" },
-  { name: "COLD SNAP",         icon: "❄️", temp: 16, rh: 84, desc: "Winter: heating cuts out overnight" },
-  { name: "HUMIDITY CRISIS",   icon: "💧", temp: 24, rh: 78, desc: "Dehumidifier breaks in flower" },
-  { name: "PERFECT VEG",       icon: "🍃", temp: 24, rh: 62, desc: "Dialled vegetative environment" },
-  { name: "PERFECT FLOWER",    icon: "🌺", temp: 26, rh: 50, desc: "Optimal flowering conditions" },
-  { name: "LATE FLOWER PUSH",  icon: "💎", temp: 27, rh: 44, desc: "Resin push in final 2 weeks" },
-  { name: "NIGHT DROP",        icon: "🌙", temp: 20, rh: 72, desc: "Lights-off temp/humidity shift" },
-  { name: "VEG UNDERFEEDING",  icon: "🌿", temp: 22, rh: 68, desc: "Cool veg with low VPD" },
-];
-
-// ── Grid colour helper ────────────────────────────────────────────────────────
-function vpdCellColor(vpd) {
-  if (vpd < 0.4)  return "#0a1e35";
-  if (vpd < 0.8)  return "#0d2a48";
-  if (vpd < 1.0)  return "#0a2d12";
-  if (vpd < 1.3)  return "#0d4016";
-  if (vpd < 1.5)  return "#1a6020";
-  if (vpd < 1.8)  return "#4a3200";
-  if (vpd < 2.0)  return "#6a3800";
-  return "#4a0a0a";
-}
-function vpdCellBorder(vpd) {
-  if (vpd < 0.4)  return "#30d5ff44";
-  if (vpd < 0.8)  return "#30d5ff22";
-  if (vpd < 1.5)  return "#39ff4522";
-  if (vpd < 2.0)  return "#ffb83022";
-  return "#ff3a3a22";
-}
 
 // ── Shared sub-components ─────────────────────────────────────────────────────
 function InfoBtn({ onPress }) {
@@ -232,218 +295,27 @@ function VPDGauge({ vpd, stage }) {
   );
 }
 
-// ── Heatmap grid ──────────────────────────────────────────────────────────────
-const GRID_TEMPS = [18, 20, 22, 24, 26, 28, 30, 32];
-const GRID_RHS   = [80, 75, 70, 65, 60, 55, 50, 45, 40, 35, 30];
-
-function VPDGrid({ temp, rh, onSelect }) {
-  const yAxisW = 34;
-  const cellW  = Math.floor((SW - 32 - yAxisW) / GRID_TEMPS.length);
-  const cellH  = 22;
-
-  const nearestGridTemp = GRID_TEMPS.reduce((a, b) =>
-    Math.abs(b - temp) < Math.abs(a - temp) ? b : a);
-  const nearestGridRh = GRID_RHS.reduce((a, b) =>
-    Math.abs(b - rh) < Math.abs(a - rh) ? b : a);
-
+// ── Pill selector ─────────────────────────────────────────────────────────────
+function PillSelector({ options, value, onChange }) {
   return (
-    <View>
-      {/* X-axis header */}
-      <View style={{ flexDirection: "row", paddingLeft: yAxisW, marginBottom: 2 }}>
-        {GRID_TEMPS.map(t => (
-          <View key={t} style={{ width: cellW, alignItems: "center" }}>
-            <Text style={{ color: C.greyLight, fontFamily: MONO, fontSize: 8 }}>{t}°</Text>
-          </View>
-        ))}
-      </View>
-
-      {/* Grid rows */}
-      {GRID_RHS.map(h => (
-        <View key={h} style={{ flexDirection: "row", alignItems: "center", marginBottom: 1 }}>
-          <Text style={{ width: yAxisW, color: C.greyLight, fontFamily: MONO,
-            fontSize: 8, textAlign: "right", paddingRight: 5 }}>
-            {h}%
+    <View style={{ flexDirection: "row", gap: 6, flexWrap: "wrap" }}>
+      {options.map(opt => (
+        <TouchableOpacity
+          key={opt.value}
+          onPress={() => onChange(opt.value)}
+          style={{
+            paddingHorizontal: 12, paddingVertical: 7,
+            borderRadius: 6, borderWidth: 1,
+            backgroundColor: value === opt.value ? C.greenFaint : C.surface,
+            borderColor: value === opt.value ? C.green : C.border,
+          }}>
+          <Text style={{ fontFamily: MONO, fontSize: 11,
+            color: value === opt.value ? C.green : C.greyLight }}>
+            {opt.label}
           </Text>
-          {GRID_TEMPS.map(t => {
-            const v          = calcVPD(t, h);
-            const isCurrent  = t === nearestGridTemp && h === nearestGridRh;
-            return (
-              <TouchableOpacity
-                key={t}
-                onPress={() => onSelect(t, h)}
-                style={{
-                  width: cellW, height: cellH,
-                  backgroundColor: vpdCellColor(v),
-                  borderWidth: isCurrent ? 2 : 0.5,
-                  borderColor:  isCurrent ? "#ffffff" : vpdCellBorder(v),
-                  alignItems: "center", justifyContent: "center",
-                }}>
-                {isCurrent && (
-                  <View style={{ width: 6, height: 6, borderRadius: 3,
-                    backgroundColor: "#ffffff" }} />
-                )}
-              </TouchableOpacity>
-            );
-          })}
-        </View>
+        </TouchableOpacity>
       ))}
-
-      {/* X-axis label + legend */}
-      <View style={{ flexDirection: "row", justifyContent: "space-between",
-        paddingLeft: yAxisW, marginTop: 6 }}>
-        <Text style={{ color: C.grey, fontFamily: MONO, fontSize: 9 }}>← COOLER</Text>
-        <Text style={{ color: C.grey, fontFamily: MONO, fontSize: 9, textAlign: "center" }}>
-          TEMPERATURE
-        </Text>
-        <Text style={{ color: C.grey, fontFamily: MONO, fontSize: 9 }}>HOTTER →</Text>
-      </View>
-
-      {/* Legend row */}
-      <View style={{ flexDirection: "row", justifyContent: "center",
-        gap: 10, marginTop: 10, flexWrap: "wrap" }}>
-        {[
-          { color: "#0d2a48", label: "Too Low" },
-          { color: "#1a6020", label: "Ideal" },
-          { color: "#6a3800", label: "High" },
-          { color: "#4a0a0a", label: "Danger" },
-        ].map(item => (
-          <View key={item.label}
-            style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
-            <View style={{ width: 12, height: 12, backgroundColor: item.color,
-              borderRadius: 2, borderWidth: 1, borderColor: "rgba(255,255,255,0.12)" }} />
-            <Text style={{ color: C.greyLight, fontFamily: MONO, fontSize: 9 }}>
-              {item.label}
-            </Text>
-          </View>
-        ))}
-      </View>
     </View>
-  );
-}
-
-// ── Plant state card ──────────────────────────────────────────────────────────
-function PlantStateCard({ vpd, stage }) {
-  const ps  = getPlantState(vpd);
-  const { colour: stColour } = vpdStatus(vpd, stage);
-  const [expanded, setExpanded] = useState(false);
-
-  return (
-    <View style={{ borderRadius: 12, borderWidth: 1.5, borderColor: ps.colour,
-      backgroundColor: `${ps.colour}10`, overflow: "hidden", marginBottom: 16 }}>
-
-      {/* Header row */}
-      <TouchableOpacity onPress={() => setExpanded(e => !e)}
-        style={{ flexDirection: "row", alignItems: "center",
-          justifyContent: "space-between", padding: 14 }}>
-        <View>
-          <Text style={{ color: ps.colour, fontFamily: MONO,
-            fontSize: 13, fontWeight: "bold", letterSpacing: 1.5 }}>
-            {ps.stateLabel}
-          </Text>
-          <Text style={{ color: C.greyLight, fontFamily: MONO, fontSize: 11, marginTop: 3 }}>
-            {ps.transpiration}
-          </Text>
-        </View>
-        <View style={{ alignItems: "flex-end" }}>
-          <Text style={{ color: stColour, fontFamily: MONO, fontSize: 22, fontWeight: "bold" }}>
-            {vpd.toFixed(2)}
-          </Text>
-          <Text style={{ color: C.grey, fontFamily: MONO, fontSize: 9 }}>kPa  {expanded ? "▲" : "▼"}</Text>
-        </View>
-      </TouchableOpacity>
-
-      {expanded && (
-        <View style={{ paddingHorizontal: 14, paddingBottom: 14 }}>
-          {/* Summary */}
-          <Text style={{ color: C.white, fontFamily: MONO, fontSize: 12,
-            lineHeight: 19, marginBottom: 14 }}>
-            {ps.summary}
-          </Text>
-
-          {/* What you'll see */}
-          <View style={{ backgroundColor: "rgba(0,0,0,0.30)", borderRadius: 8,
-            padding: 12, marginBottom: 10 }}>
-            <Text style={{ color: C.greyLight, fontFamily: MONO, fontSize: 10,
-              letterSpacing: 1.5, marginBottom: 8 }}>WHAT YOU'LL SEE ON THE PLANT</Text>
-            {ps.symptoms.map((s, i) => (
-              <View key={i} style={{ flexDirection: "row", alignItems: "flex-start",
-                marginBottom: 5 }}>
-                <Text style={{ color: ps.colour, fontFamily: MONO,
-                  fontSize: 11, marginRight: 8, marginTop: 1 }}>→</Text>
-                <Text style={{ color: C.white, fontFamily: MONO,
-                  fontSize: 12, lineHeight: 17, flex: 1 }}>
-                  {s}
-                </Text>
-              </View>
-            ))}
-          </View>
-
-          {/* Risk badge */}
-          <View style={{ backgroundColor: `${ps.riskColour}18`, borderRadius: 8,
-            borderWidth: 1, borderColor: ps.riskColour, padding: 10, marginBottom: 10 }}>
-            <Text style={{ color: ps.riskColour, fontFamily: MONO, fontSize: 10,
-              letterSpacing: 1.5, marginBottom: 4 }}>RISK LEVEL</Text>
-            <Text style={{ color: C.white, fontFamily: MONO,
-              fontSize: 12, lineHeight: 18 }}>
-              {ps.risk}
-            </Text>
-          </View>
-
-          {/* Fix steps */}
-          <View style={{ backgroundColor: "rgba(0,0,0,0.30)", borderRadius: 8, padding: 12 }}>
-            <Text style={{ color: C.green, fontFamily: MONO, fontSize: 10,
-              letterSpacing: 1.5, marginBottom: 8 }}>HOW TO FIX IT</Text>
-            {ps.fix.map((f, i) => (
-              <View key={i} style={{ flexDirection: "row", alignItems: "flex-start",
-                marginBottom: 6 }}>
-                <Text style={{ color: C.green, fontFamily: MONO,
-                  fontSize: 11, marginRight: 8, fontWeight: "bold" }}>
-                  {i + 1}.
-                </Text>
-                <Text style={{ color: C.white, fontFamily: MONO,
-                  fontSize: 12, lineHeight: 17, flex: 1 }}>
-                  {f}
-                </Text>
-              </View>
-            ))}
-          </View>
-        </View>
-      )}
-    </View>
-  );
-}
-
-// ── Scenario card ─────────────────────────────────────────────────────────────
-function ScenarioCard({ scenario, stage, onLoad, isActive }) {
-  const vpd    = calcVPD(scenario.temp, scenario.rh);
-  const { colour, label: statusLabel } = vpdStatus(vpd, stage);
-
-  return (
-    <TouchableOpacity onPress={onLoad} activeOpacity={0.75}
-      style={{ width: (SW - 48) / 2, borderRadius: 10, borderWidth: 1.5,
-        borderColor: isActive ? colour : C.border,
-        backgroundColor: isActive ? `${colour}12` : C.card,
-        padding: 12, marginBottom: 10 }}>
-      <Text style={{ fontSize: 22, marginBottom: 6 }}>{scenario.icon}</Text>
-      <Text style={{ color: isActive ? colour : C.white, fontFamily: MONO,
-        fontSize: 11, fontWeight: "bold", marginBottom: 3 }}>
-        {scenario.name}
-      </Text>
-      <Text style={{ color: C.grey, fontFamily: MONO, fontSize: 9,
-        marginBottom: 8, lineHeight: 13 }}>
-        {scenario.desc}
-      </Text>
-      <View style={{ flexDirection: "row", justifyContent: "space-between",
-        alignItems: "center" }}>
-        <Text style={{ color: C.greyLight, fontFamily: MONO, fontSize: 9 }}>
-          {scenario.temp}°C / {scenario.rh}%
-        </Text>
-        <Text style={{ color: colour, fontFamily: MONO,
-          fontSize: 11, fontWeight: "bold" }}>
-          {vpd.toFixed(2)} kPa
-        </Text>
-      </View>
-    </TouchableOpacity>
   );
 }
 
@@ -454,8 +326,8 @@ const VPD_INFO = {
   what: "VPD (Vapour Pressure Deficit) measures the difference between how much moisture the air is holding and how much it could hold. Plants use this gradient to decide how hard to breathe — too low and they stop, too high and they shut down.",
   sections: [
     { icon: "📐", title: "THE NUMBER (kPa)", text: "kPa = kilopascals. Think of it as how hard your plant is working. 0.4-0.8 for seedlings. 0.8-1.2 for veg. 1.0-1.5 for flower. 1.5-2.0 for the final 2 weeks of late flower only." },
-    { icon: "🗺", title: "SIMULATE TAB — THE GRID", text: "The heatmap shows VPD for every temp/RH combination. Blue = too low, green = ideal, amber/red = too high. Tap any cell to snap to those conditions and see what happens to your plant." },
-    { icon: "🌸", title: "SCENARIO BANK", text: "Real-world crisis scenarios — heat waves, humidity spikes, cold snaps. Tap any card to load that environment and read the full plant response: what happens, what you'll see on the leaves, and step-by-step rescue plan." },
+    { icon: "🌿", title: "SIMULATE TAB", text: "Set your environment (temp, RH, light, nutrients, water) and run a 7, 14 or 21-day simulation. The plant visual reflects accumulated stress. Day log shows per-day health, VPD, active symptoms and prevention tips." },
+    { icon: "🌸", title: "SCENARIO BANK", text: "Real-world crisis scenarios — heat waves, humidity spikes, cold snaps, overfeeding. Tap any card to pre-load all 5 condition variables, then hit a run button to simulate." },
     { icon: "💧", title: "PLANT STATE CARD", text: "Below the grid, the plant state card updates live. Tap it to expand — shows transpiration status, visible symptoms, risk level, and a numbered fix list. This is your on-the-spot grow doctor." },
   ],
   tip: "Change humidity first — it's easier than temperature. A dehumidifier, humidifier, or even a bowl of water can shift RH 5-15% faster than you can change air temp.",
@@ -528,12 +400,20 @@ function VPDInfoModal({ visible, onClose }) {
 
 // ── Main screen ───────────────────────────────────────────────────────────────
 export default function VPDCalculator() {
-  const [temp,     setTemp]     = useState(24.0);
-  const [rh,       setRh]       = useState(55.0);
-  const [stage,    setStage]    = useState("Vegetative");
-  const [tab,      setTab]      = useState("calc");    // "calc" | "simulate"
-  const [showInfo, setShowInfo] = useState(false);
+  const [temp,          setTemp]          = useState(24.0);
+  const [rh,            setRh]            = useState(55.0);
+  const [stage,         setStage]         = useState("Vegetative");
+  const [tab,           setTab]           = useState("calc");    // "calc" | "simulate"
+  const [showInfo,      setShowInfo]      = useState(false);
   const [activeScenario, setActiveScenario] = useState(null);
+
+  // Simulate tab state
+  const [simNutrients,  setSimNutrients]  = useState("med");   // "low"|"med"|"high"|"toxic"
+  const [simWater,      setSimWater]      = useState("ok");    // "dry"|"ok"|"over"
+  const [simLight,      setSimLight]      = useState("18");    // "18"|"12"
+  const [simLog,        setSimLog]        = useState([]);
+  const [simHealth,     setSimHealth]     = useState(100);
+  const [hasSimulated,  setHasSimulated]  = useState(false);
 
   const vpd = useMemo(() => calcVPD(temp, rh), [temp, rh]);
   const { colour, label: statusLabel } = vpdStatus(vpd, stage);
@@ -572,17 +452,16 @@ export default function VPDCalculator() {
     return `LOWER TEMP to ${Math.round((temp - 1) * 2) / 2}°C  OR  RAISE RH to ${Math.round(rh + 5)}%`;
   }, [vpd, stage, temp, rh]);
 
-  const loadScenario = (s) => {
+  function loadScenario(s) {
     setTemp(s.temp);
     setRh(s.rh);
+    setSimLight(s.light || "12");
+    setSimNutrients(s.nutrients || "med");
+    setSimWater(s.water || "ok");
     setActiveScenario(s.name);
-  };
-
-  const handleGridSelect = (t, h) => {
-    setTemp(t);
-    setRh(h);
-    setActiveScenario(null);
-  };
+    setSimLog([]);
+    setHasSimulated(false);
+  }
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
@@ -727,75 +606,201 @@ export default function VPDCalculator() {
       {tab === "simulate" && (
         <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 60 }}>
 
-          {/* Live VPD badge */}
-          <View style={{ flexDirection: "row", alignItems: "center",
-            justifyContent: "space-between", marginBottom: 14 }}>
-            <View>
-              <Text style={{ color: C.greyLight, fontFamily: MONO, fontSize: 10,
-                letterSpacing: 1.5 }}>CURRENT CONDITIONS</Text>
-              <Text style={{ color: C.white, fontFamily: MONO, fontSize: 13, marginTop: 2 }}>
-                {temp}°C · {rh}% RH
-              </Text>
-            </View>
-            <View style={{ alignItems: "flex-end" }}>
-              <Text style={{ color: colour, fontFamily: MONO,
-                fontSize: 28, fontWeight: "bold" }}>
-                {vpd.toFixed(2)}
-              </Text>
-              <Text style={{ color: colour, fontFamily: MONO,
-                fontSize: 10, fontWeight: "bold" }}>
-                kPa — {statusLabel}
-              </Text>
-            </View>
+          {/* A. Plant display + health bar */}
+          <View style={{ alignItems: "center", marginBottom: 8 }}>
+            <PlantRenderer
+              width={SW - 48}
+              height={200}
+              stage={stage}
+              stressLevel={hasSimulated ? (100 - simHealth) / 100 : 0}
+            />
           </View>
-
-          {/* Heatmap grid */}
-          <View style={{ backgroundColor: C.card, borderRadius: 10,
-            borderWidth: 1, borderColor: C.border, padding: 12, marginBottom: 16 }}>
-            <Label style={{ marginBottom: 10 }}>
-              VPD ZONE MAP — TAP ANY CELL TO EXPLORE
-            </Label>
-            <Text style={{ color: C.grey, fontFamily: MONO,
-              fontSize: 10, marginBottom: 10, lineHeight: 15 }}>
-              White dot = your current conditions. Tap a cell to snap to those values.
+          <View style={{ marginBottom: 16 }}>
+            <View style={{ height: 8, backgroundColor: C.surface, borderRadius: 4,
+              overflow: "hidden", marginBottom: 6 }}>
+              {hasSimulated && (
+                <View style={{
+                  width: `${simHealth}%`, height: 8, borderRadius: 4,
+                  backgroundColor: simHealth >= 80 ? C.green : simHealth >= 55 ? C.amber : C.red,
+                }} />
+              )}
+            </View>
+            <Text style={{ fontFamily: MONO, fontSize: 12,
+              color: hasSimulated
+                ? (simHealth >= 80 ? C.green : simHealth >= 55 ? C.amber : C.red)
+                : C.greyLight,
+              textAlign: "center" }}>
+              {hasSimulated
+                ? `${simHealth}%  ${simHealth >= 80 ? "HEALTHY" : simHealth >= 55 ? "RECOVERING" : "STRESSED"}`
+                : "READY TO SIMULATE"}
             </Text>
-            <VPDGrid temp={temp} rh={rh} onSelect={handleGridSelect} />
           </View>
 
-          {/* Plant state card */}
-          <Label style={{ marginBottom: 8 }}>PLANT STATE AT CURRENT VPD</Label>
-          <PlantStateCard vpd={vpd} stage={stage} />
+          {/* B. Environment controls */}
+          <Label style={{ marginBottom: 12 }}>Environment</Label>
+          <NumInput label="TEMPERATURE" value={temp}
+            onChange={v => { setTemp(v); setActiveScenario(null); }}
+            unit="°C" min={10} max={40} step={0.5} />
+          <NumInput label="HUMIDITY" value={rh}
+            onChange={v => { setRh(v); setActiveScenario(null); }}
+            unit="%" min={20} max={95} step={1} />
 
-          {/* Mini controls so you don't have to switch tabs */}
-          <View style={{ backgroundColor: C.card, borderRadius: 10,
-            borderWidth: 1, borderColor: C.border, padding: 14, marginBottom: 16 }}>
-            <Label style={{ marginBottom: 12 }}>FINE-TUNE CONDITIONS</Label>
-            <NumInput label="TEMPERATURE" value={temp}
-              onChange={v => { setTemp(v); setActiveScenario(null); }}
-              unit="°C" min={10} max={40} step={0.5} />
-            <NumInput label="HUMIDITY" value={rh}
-              onChange={v => { setRh(v); setActiveScenario(null); }}
-              unit="%" min={10} max={100} step={1} />
+          {/* Live VPD readout */}
+          <View style={{ flexDirection: "row", alignItems: "center",
+            justifyContent: "space-between", marginBottom: 16 }}>
+            <Text style={{ fontFamily: MONO, fontSize: 11, color: C.greyLight }}>LIVE VPD</Text>
+            <Text style={{ fontFamily: MONO, fontSize: 18, fontWeight: "bold", color: colour }}>
+              {vpd.toFixed(2)} kPa — {statusLabel}
+            </Text>
           </View>
 
-          {/* Scenario bank */}
-          <Label style={{ marginBottom: 6 }}>SCENARIO BANK</Label>
-          <Text style={{ color: C.grey, fontFamily: MONO, fontSize: 10,
-            lineHeight: 15, marginBottom: 12 }}>
-            Tap a scenario to load it and see the full plant response — what's happening, what you'd see, and how to rescue it.
-          </Text>
-          <View style={{ flexDirection: "row", flexWrap: "wrap",
-            justifyContent: "space-between" }}>
-            {SCENARIOS.map(s => (
-              <ScenarioCard
-                key={s.name}
-                scenario={s}
-                stage={stage}
-                isActive={activeScenario === s.name}
-                onLoad={() => loadScenario(s)}
-              />
+          <View style={{ marginBottom: 14 }}>
+            <Label style={{ marginBottom: 8 }}>Light cycle</Label>
+            <PillSelector
+              options={[
+                { value: "18", label: "18H  VEG" },
+                { value: "12", label: "12H  FLOWER" },
+              ]}
+              value={simLight}
+              onChange={setSimLight}
+            />
+          </View>
+
+          <View style={{ marginBottom: 14 }}>
+            <Label style={{ marginBottom: 8 }}>Nutrients</Label>
+            <PillSelector
+              options={[
+                { value: "low",   label: "LOW" },
+                { value: "med",   label: "MEDIUM" },
+                { value: "high",  label: "HIGH" },
+                { value: "toxic", label: "TOXIC ☠" },
+              ]}
+              value={simNutrients}
+              onChange={setSimNutrients}
+            />
+          </View>
+
+          <View style={{ marginBottom: 16 }}>
+            <Label style={{ marginBottom: 8 }}>Water</Label>
+            <PillSelector
+              options={[
+                { value: "dry",  label: "DRY" },
+                { value: "ok",   label: "CORRECT" },
+                { value: "over", label: "OVERWATERED" },
+              ]}
+              value={simWater}
+              onChange={setSimWater}
+            />
+          </View>
+
+          {/* C. Run buttons */}
+          <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
+            {[7, 14, 21].map(d => (
+              <TouchableOpacity key={d} onPress={() => {
+                const log = runSimulation(d, temp, rh, stage, simNutrients, simWater);
+                setSimLog(log);
+                setSimHealth(log[log.length - 1].health);
+                setHasSimulated(true);
+              }} style={{ flex: 1, paddingVertical: 12, backgroundColor: C.greenFaint,
+                borderRadius: 8, borderWidth: 1, borderColor: C.greenDim, alignItems: "center" }}>
+                <Text style={{ fontFamily: MONO, fontSize: 12, color: C.green }}>▶ {d}D</Text>
+              </TouchableOpacity>
             ))}
+            <TouchableOpacity onPress={() => {
+              setSimLog([]);
+              setSimHealth(100);
+              setHasSimulated(false);
+              setActiveScenario(null);
+            }}
+              style={{ paddingHorizontal: 14, paddingVertical: 12, backgroundColor: C.surface,
+                borderRadius: 8, borderWidth: 1, borderColor: C.border, alignItems: "center" }}>
+              <Text style={{ fontFamily: MONO, fontSize: 12, color: C.greyLight }}>↺</Text>
+            </TouchableOpacity>
           </View>
+
+          {/* D. Active symptoms */}
+          {hasSimulated && simLog.length > 0 && (
+            <View style={{ marginTop: 16 }}>
+              <Label style={{ marginBottom: 8 }}>Active symptoms</Label>
+              {simLog[simLog.length - 1].symptoms.map((s, i) => (
+                <Text key={i} style={{ fontFamily: MONO, fontSize: 12,
+                  color: s.includes("healthy") ? C.green : C.amber, marginBottom: 4 }}>
+                  {s.includes("healthy") ? "✓ " : "⚠ "}{s}
+                </Text>
+              ))}
+            </View>
+          )}
+
+          {/* E. Prevention tips */}
+          {hasSimulated && (() => {
+            const currentVpd = calcVPD(temp, rh);
+            const tips = getPreventionTips(temp, currentVpd, stage, simNutrients, simWater);
+            return (
+              <View style={{ marginTop: 16 }}>
+                <Label style={{ marginBottom: 8 }}>Prevention</Label>
+                {tips.map((tip, i) => (
+                  <Text key={i} style={{ fontFamily: MONO, fontSize: 12,
+                    color: tip.includes("optimal") ? C.green : C.blue, marginBottom: 4 }}>
+                    {tip.includes("optimal") ? "✓ " : "→ "}{tip}
+                  </Text>
+                ))}
+              </View>
+            );
+          })()}
+
+          {/* F. Day log */}
+          {hasSimulated && simLog.length > 0 && (
+            <View style={{ marginTop: 16 }}>
+              <Label style={{ marginBottom: 8 }}>Day log</Label>
+              {[...simLog].reverse().map(entry => {
+                const hc = entry.health >= 80 ? C.green : entry.health >= 55 ? C.amber : C.red;
+                return (
+                  <View key={entry.day} style={{ flexDirection: "row", alignItems: "center",
+                    paddingVertical: 8, borderBottomWidth: 1, borderColor: C.border }}>
+                    <Text style={{ fontFamily: MONO, fontSize: 11, color: C.grey, width: 44 }}>
+                      DAY {entry.day}
+                    </Text>
+                    <View style={{ flex: 1, height: 6, backgroundColor: C.surface,
+                      borderRadius: 3, overflow: "hidden", marginHorizontal: 8 }}>
+                      <View style={{ width: `${entry.health}%`, height: 6,
+                        backgroundColor: hc, borderRadius: 3 }} />
+                    </View>
+                    <Text style={{ fontFamily: MONO, fontSize: 11, color: hc, width: 36, textAlign: "right" }}>
+                      {entry.health}%
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
+          )}
+
+          {/* G. Scenario bank */}
+          <View style={{ marginTop: 20 }}>
+            <Label style={{ marginBottom: 10 }}>Scenario bank</Label>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+              {SCENARIOS.map(s => (
+                <TouchableOpacity
+                  key={s.name}
+                  onPress={() => loadScenario(s)}
+                  style={{
+                    width: (SW - 48 - 8) / 2,
+                    padding: 12,
+                    backgroundColor: activeScenario === s.name ? C.greenFaint : C.surface,
+                    borderRadius: 8, borderWidth: 1,
+                    borderColor: activeScenario === s.name ? C.green : C.border,
+                  }}>
+                  <Text style={{ fontFamily: MONO, fontSize: 16, marginBottom: 4 }}>{s.icon}</Text>
+                  <Text style={{ fontFamily: MONO, fontSize: 11, color: C.white, marginBottom: 3, letterSpacing: 0.5 }}>
+                    {s.name}
+                  </Text>
+                  <Text style={{ fontFamily: MONO, fontSize: 10, color: C.greyLight, lineHeight: 15 }}>
+                    {s.desc}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
         </ScrollView>
       )}
 
