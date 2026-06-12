@@ -580,8 +580,10 @@ export default function VirtualGrow() {
     const pool = strainsPoolRef.current;
     if (!pool.length) return;
     setDay(1);
-    setStrain(getRandomStrain(pool));
+    const next = getRandomStrain(pool);
+    setStrain(next);
     setAlreadyShelved(false);
+    AsyncStorage.setItem("vyweed_current_strain", JSON.stringify(next)).catch(() => {});
     // Background-refresh pool with a new random page for next pull
     cachedFetch(`${API_BASE}/search?per_page=${PAGE_SIZE}&page=${randomPage()}&sort=name`)
       .then(result => {
@@ -591,20 +593,40 @@ export default function VirtualGrow() {
       .catch(() => {});
   };
 
-  // Load a random page of strains on mount — covers all 5,042 across ~51 pages
+  // Restore saved strain on mount; only fetch a new one if none saved
   useEffect(() => {
-    cachedFetch(`${API_BASE}/search?per_page=${PAGE_SIZE}&page=${randomPage()}&sort=name`)
-      .then(result => {
-        const strains = result.data?.results || [];
-        if (strains.length > 0) {
-          strainsPoolRef.current = strains;
-          const pulled = getRandomStrain(strains);
-          setStrain(pulled);
-          setAlreadyShelved(trophies.some(t => t.strainId === pulled.id));
+    AsyncStorage.getItem("vyweed_current_strain")
+      .catch(() => null)
+      .then(savedRaw => {
+        if (savedRaw) {
+          const saved = JSON.parse(savedRaw);
+          strainsPoolRef.current = [saved];
+          setStrain(saved);
+          setAlreadyShelved(trophies.some(t => t.strainId === saved.id));
+          setLoading(false);
+          // silently refresh pool in background so next pull has full variety
+          cachedFetch(`${API_BASE}/search?per_page=${PAGE_SIZE}&page=${randomPage()}&sort=name`)
+            .then(result => {
+              const strains = result.data?.results || [];
+              if (strains.length > 0) strainsPoolRef.current = strains;
+            })
+            .catch(() => {});
+          return;
         }
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+        return cachedFetch(`${API_BASE}/search?per_page=${PAGE_SIZE}&page=${randomPage()}&sort=name`)
+          .then(result => {
+            const strains = result.data?.results || [];
+            if (strains.length > 0) {
+              strainsPoolRef.current = strains;
+              const pulled = getRandomStrain(strains);
+              setStrain(pulled);
+              setAlreadyShelved(trophies.some(t => t.strainId === pulled.id));
+              AsyncStorage.setItem("vyweed_current_strain", JSON.stringify(pulled)).catch(() => {});
+            }
+          })
+          .catch(() => {})
+          .finally(() => setLoading(false));
+      });
   }, []);
 
   const totalDays  = strain ? (strain.flower_wk_max + 4) * 7 : 90;
@@ -845,7 +867,9 @@ export default function VirtualGrow() {
                 const strains = result.data?.results || [];
                 if (strains.length > 0) {
                   strainsPoolRef.current = strains;
-                  setStrain(getRandomStrain(strains));
+                  const pulled = getRandomStrain(strains);
+                  setStrain(pulled);
+                  AsyncStorage.setItem("vyweed_current_strain", JSON.stringify(pulled)).catch(() => {});
                 }
               })
               .catch(() => {})

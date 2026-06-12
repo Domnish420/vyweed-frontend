@@ -424,6 +424,7 @@ export default function SettingsScreen() {
                       await AsyncStorage.multiRemove([
                         "vyweed_trophies",
                         "vyweed_wait_timer",
+                        "vyweed_current_strain",
                       ]).catch(() => {});
                       Alert.alert("Done", "Game data wiped. Start fresh!");
                     },
