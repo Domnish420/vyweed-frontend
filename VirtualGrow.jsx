@@ -454,7 +454,8 @@ export default function VirtualGrow() {
   const [alreadyShelved, setAlreadyShelved] = useState(false);
   const [timerRemaining, setTimerRemaining] = useState(0);
   const [timerActive, setTimerActive]       = useState(false);
-  const timerRef = useRef(null);
+  const timerRef      = useRef(null);
+  const strainsPoolRef = useRef([]);   // holds loaded strains for instant re-rolls
   const { isIRL } = useAppMode();
   const fadeAnim = useRef(new Animated.Value(1)).current;
 
@@ -498,32 +499,22 @@ export default function VirtualGrow() {
   };
 
   const loadNextStrain = () => {
-    setLoading(true);
+    const pool = strainsPoolRef.current;
+    if (!pool.length) return;
     setDay(1);
+    setStrain(getRandomStrain(pool));
+    setAlreadyShelved(false);
+  };
+
+  // Load strain pool once on mount, then keep it in memory for instant re-rolls
+  useEffect(() => {
     cachedFetch(`${API_BASE}/search?per_page=200&sort=name`)
       .then(result => {
         const strains = result.data?.results || [];
         if (strains.length > 0) {
-          const earned = new Set(trophies.map(t => t.strainId));
-          const available = strains.filter(s => !earned.has(s.id));
-          const pool = available.length > 0 ? available : strains;
-          setStrain(getRandomStrain(pool));
-          setAlreadyShelved(false);
-        }
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  };
-
-  // Load today's strain
-  useEffect(() => {
-    cachedFetch(`${API_BASE}/search?per_page=100&sort=name`)
-      .then(result => {
-        const strains = result.data?.results || [];
-        if (strains.length > 0) {
+          strainsPoolRef.current = strains;
           const pulled = getRandomStrain(strains);
           setStrain(pulled);
-          // Prevent re-shelving a strain already in the collection
           setAlreadyShelved(trophies.some(t => t.strainId === pulled.id));
         }
       })
