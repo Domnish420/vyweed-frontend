@@ -11,6 +11,7 @@ import { cachedFetch } from "./cache";
 import { setGrowverContext } from "./growverContext";
 import { API_V1 as API_BASE } from "./apiConfig";
 import SeedTray from "./SeedTray";
+import PlantRenderer from "./PlantRenderer";
 
 const { width: SW } = Dimensions.get("window");
 
@@ -884,25 +885,16 @@ export default function RTLGrow({ trophies, onAddTrophy, tokens, onEarnToken, on
         </View>
 
         {/* ── Plant visual ─── */}
-        <View style={{ alignItems: "center", paddingVertical: 20 }}>
-          <View style={{
-            width: 160, height: 160, borderRadius: 80,
-            backgroundColor: `${stageCol}0d`,
-            borderWidth: 1, borderColor: `${stageCol}22`,
-            alignItems: "center", justifyContent: "center",
-          }}>
-            {/* HUD corners */}
-            {[
-              { top: 8,  left: 8,  borderTopWidth: 1,    borderLeftWidth: 1 },
-              { top: 8,  right: 8, borderTopWidth: 1,    borderRightWidth: 1 },
-              { bottom: 8, left: 8,  borderBottomWidth: 1, borderLeftWidth: 1 },
-              { bottom: 8, right: 8, borderBottomWidth: 1, borderRightWidth: 1 },
-            ].map((s, i) => (
-              <View key={i} style={{ position: "absolute", width: 14, height: 14, borderColor: `${stageCol}50`, ...s }} />
-            ))}
-            <Text style={{ fontSize: 68 }}>{glyph}</Text>
-          </View>
-          <Text style={{ color: C.grey, fontFamily: SANS, fontSize: 9, marginTop: 10, letterSpacing: 1.5 }}>
+        <View style={{ alignItems: "center", paddingVertical: 8 }}>
+          <PlantRenderer
+            width={260}
+            height={280}
+            stage={description?.stage || "Seedling"}
+            strainType={growData.strainData.type}
+            tier={growData.strainData.tier}
+            strainSeed={growData.strainData.id}
+          />
+          <Text style={{ color: C.grey, fontFamily: SANS, fontSize: 9, marginTop: 4, letterSpacing: 1.5 }}>
             {isHarvest ? "🌿 HARVEST READY" : "🏡 REAL-TIME GROW"}
           </Text>
         </View>
