@@ -91,13 +91,12 @@ function getMetal(difficulty, tier) {
   return "bronze";
 }
 
-// ── Seed-based daily strain picker ────────────────────────────────────────────
-function getDailyStrain(strains) {
-  const today = new Date();
-  const seed = today.getFullYear() * 10000 + (today.getMonth() + 1) * 100 + today.getDate();
+// ── Shared seeded strain picker ───────────────────────────────────────────────
+function pickStrain(strains, seed) {
   const weights = { T1: 2, T2: 8, T3: 30, T4: 60 };
   const pool = strains.filter(s => weights[s.tier] > 0);
-  let hash = seed;
+  if (!pool.length) return strains[0];
+  let hash = seed & 0x7fffffff;
   const rand = () => {
     hash = ((hash << 5) - hash + 7919) & 0x7fffffff;
     return (hash & 0x7fffffff) / 0x7fffffff;
@@ -110,8 +109,15 @@ function getDailyStrain(strains) {
     if (tierRoll <= 0) { chosenTier = tier; break; }
   }
   const tierPool = pool.filter(s => s.tier === chosenTier);
-  const idx = Math.floor(rand() * tierPool.length);
-  return tierPool[idx] || pool[Math.floor(rand() * pool.length)];
+  if (!tierPool.length) return pool[Math.floor(rand() * pool.length)];
+  return tierPool[Math.floor(rand() * tierPool.length)];
+}
+
+// Daily seed: same strain all day, changes at midnight
+function getDailyStrain(strains) {
+  const today = new Date();
+  const seed = today.getFullYear() * 10000 + (today.getMonth() + 1) * 100 + today.getDate();
+  return pickStrain(strains, seed);
 }
 
 // ── Day description generator ──────────────────────────────────────────────────
@@ -513,7 +519,8 @@ export default function VirtualGrow() {
           const earned = new Set(trophies.map(t => t.strainId));
           const available = strains.filter(s => !earned.has(s.id));
           const pool = available.length > 0 ? available : strains;
-          setStrain(getDailyStrain(pool));
+          // Use current timestamp as seed so each new strain is genuinely different
+          setStrain(pickStrain(pool, Date.now() & 0x7fffffff));
           setAlreadyShelved(false);
         }
       })
