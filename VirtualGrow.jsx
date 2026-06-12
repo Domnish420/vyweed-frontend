@@ -91,33 +91,21 @@ function getMetal(difficulty, tier) {
   return "bronze";
 }
 
-// ── Shared seeded strain picker ───────────────────────────────────────────────
-function pickStrain(strains, seed) {
+// ── Gacha strain pull — weighted random, new result every time ────────────────
+function getRandomStrain(strains) {
   const weights = { T1: 2, T2: 8, T3: 30, T4: 60 };
   const pool = strains.filter(s => weights[s.tier] > 0);
   if (!pool.length) return strains[0];
-  let hash = seed & 0x7fffffff;
-  const rand = () => {
-    hash = ((hash << 5) - hash + 7919) & 0x7fffffff;
-    return (hash & 0x7fffffff) / 0x7fffffff;
-  };
   const totalWeight = Object.values(weights).reduce((a, b) => a + b, 0);
-  let tierRoll = rand() * totalWeight;
+  let tierRoll = Math.random() * totalWeight;
   let chosenTier = "T4";
   for (const [tier, w] of Object.entries(weights)) {
     tierRoll -= w;
     if (tierRoll <= 0) { chosenTier = tier; break; }
   }
   const tierPool = pool.filter(s => s.tier === chosenTier);
-  if (!tierPool.length) return pool[Math.floor(rand() * pool.length)];
-  return tierPool[Math.floor(rand() * tierPool.length)];
-}
-
-// Daily seed: same strain all day, changes at midnight
-function getDailyStrain(strains) {
-  const today = new Date();
-  const seed = today.getFullYear() * 10000 + (today.getMonth() + 1) * 100 + today.getDate();
-  return pickStrain(strains, seed);
+  if (!tierPool.length) return pool[Math.floor(Math.random() * pool.length)];
+  return tierPool[Math.floor(Math.random() * tierPool.length)];
 }
 
 // ── Day description generator ──────────────────────────────────────────────────
@@ -519,8 +507,7 @@ export default function VirtualGrow() {
           const earned = new Set(trophies.map(t => t.strainId));
           const available = strains.filter(s => !earned.has(s.id));
           const pool = available.length > 0 ? available : strains;
-          // Use current timestamp as seed so each new strain is genuinely different
-          setStrain(pickStrain(pool, Date.now() & 0x7fffffff));
+          setStrain(getRandomStrain(pool));
           setAlreadyShelved(false);
         }
       })
@@ -534,11 +521,10 @@ export default function VirtualGrow() {
       .then(result => {
         const strains = result.data?.results || [];
         if (strains.length > 0) {
-          const daily = getDailyStrain(strains);
-          setStrain(daily);
-          const todayKey = new Date().toISOString().slice(0, 10);
-          const alreadyDone = trophies.some(t => t.strainId === daily.id && t.date === todayKey);
-          setAlreadyShelved(alreadyDone);
+          const pulled = getRandomStrain(strains);
+          setStrain(pulled);
+          // Prevent re-shelving a strain already in the collection
+          setAlreadyShelved(trophies.some(t => t.strainId === pulled.id));
         }
       })
       .catch(() => {})
@@ -612,7 +598,7 @@ export default function VirtualGrow() {
                 VY<Text style={{ color: C.green }}>WEED</Text>
               </Text>
               <Text style={{ color: C.greyLight, fontFamily: SANS, fontSize: 10, letterSpacing: 2 }}>
-                NEXT STRAIN GROWING...
+                NEXT PULL LOADING...
               </Text>
             </View>
             <TouchableOpacity onPress={() => setScreen("collection")} style={{ alignItems: "center" }}>
@@ -759,7 +745,7 @@ export default function VirtualGrow() {
       <View style={{ flex: 1, backgroundColor: C.bg, alignItems: "center", justifyContent: "center" }}>
         <ActivityIndicator color={C.green} size="large" />
         <Text style={{ color: C.grey, fontFamily: SANS, fontSize: 13, marginTop: 14, letterSpacing: 1 }}>
-          Selecting today's strain...
+          Rolling your next strain...
         </Text>
       </View>
     );
@@ -784,7 +770,7 @@ export default function VirtualGrow() {
               VY<Text style={{ color: C.green }}>WEED</Text>
             </Text>
             <Text style={{ color: C.greyLight, fontFamily: SANS, fontSize: 10, letterSpacing: 2 }}>
-              {isIRL ? "GROW REFERENCE" : "STRAIN OF THE DAY"}
+              {isIRL ? "GROW REFERENCE" : "GACHA GROW"}
             </Text>
           </View>
           <TouchableOpacity onPress={() => setScreen("collection")} style={{ alignItems: "center" }}>
