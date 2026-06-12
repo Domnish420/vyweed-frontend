@@ -15,24 +15,49 @@ import { getApiBaseUrl } from "./apiConfig";
 function buildSystemMessage(screen, screenCtx, outdoorCtx) {
   const base = "You are Growver, an expert cannabis growing assistant built into the VYWEED app. ";
 
-  if (screen === "outdoor" && outdoorCtx) {
-    return (
-      base +
-      "The user is on the outdoor growing guide. You have their REAL-TIME conditions — " +
-      "use them directly and do NOT ask for weather information.\n\n" +
-      `Location: ${outdoorCtx.city}, ${outdoorCtx.country} (${outdoorCtx.lat}° ${outdoorCtx.hemisphere === "Northern" ? "N" : "S"})\n` +
-      `Temperature: ${outdoorCtx.temp}°C (feels ${outdoorCtx.feelsLike}°C)\n` +
-      `Humidity: ${outdoorCtx.humidity}%\n` +
-      `Wind: ${outdoorCtx.wind}km/h ${outdoorCtx.windDir}\n` +
-      `UV: ${outdoorCtx.uv ?? "N/A"} · Conditions: ${outdoorCtx.weatherDesc}\n` +
-      `Daylight: ${outdoorCtx.daylightHours}h — ${outdoorCtx.daylightZone}\n` +
-      `Season: ${outdoorCtx.season}, ${outdoorCtx.hemisphere} hemisphere\n` +
-      `Planting status: ${outdoorCtx.plantingStatus}\n` +
-      `Active risks: ${outdoorCtx.risks}`
-    );
-  }
-
   const d = screenCtx?.data;
+  const ctxScreen = screenCtx?.screen;
+
+  if (screen === "outdoor") {
+    // Greenhouse mode — plant context takes priority, weather appended if available
+    if (ctxScreen === "greenhouse" && d?.strainName) {
+      const weatherPart = outdoorCtx
+        ? `\nOutdoor conditions: ${outdoorCtx.temp}°C · ${outdoorCtx.humidity}% humidity · ${outdoorCtx.weatherDesc}` +
+          (outdoorCtx.wind ? ` · ${outdoorCtx.wind}km/h wind` : "") + "\n"
+        : "";
+      return (
+        base +
+        `The user is in GREENHOUSE mode on the OUTDOOR tab — a real-time grow where 1 real day = 3 grow days.\n` +
+        `The plant is growing using the user's actual outdoor environment.\n\n` +
+        `Strain: ${d.strainName} (${d.tier}, ${d.difficulty}, up to ${d.thcMax}% THC)\n` +
+        `Aroma: ${d.aroma}\n` +
+        `Day: ${d.day} of ${d.totalDays} · Stage: ${d.stage}\n` +
+        `What's happening: ${d.stageDesc}\n` +
+        `Grower tip: ${d.tip}\n` +
+        (d.isHarvest ? "Status: HARVEST READY — the plant has completed its cycle.\n" : "") +
+        (d.nextDayIn ? `Next grow day advances in: ${d.nextDayIn}\n` : "") +
+        weatherPart +
+        "\nThis is a real-time simulation using live outdoor conditions. Reference the exact day, stage, and any weather impact on the plant."
+      );
+    }
+    // Weather mode
+    if (outdoorCtx) {
+      return (
+        base +
+        "The user is on the outdoor growing guide. You have their REAL-TIME conditions — " +
+        "use them directly and do NOT ask for weather information.\n\n" +
+        `Location: ${outdoorCtx.city}, ${outdoorCtx.country} (${outdoorCtx.lat}° ${outdoorCtx.hemisphere === "Northern" ? "N" : "S"})\n` +
+        `Temperature: ${outdoorCtx.temp}°C (feels ${outdoorCtx.feelsLike}°C)\n` +
+        `Humidity: ${outdoorCtx.humidity}%\n` +
+        `Wind: ${outdoorCtx.wind}km/h ${outdoorCtx.windDir}\n` +
+        `UV: ${outdoorCtx.uv ?? "N/A"} · Conditions: ${outdoorCtx.weatherDesc}\n` +
+        `Daylight: ${outdoorCtx.daylightHours}h — ${outdoorCtx.daylightZone}\n` +
+        `Season: ${outdoorCtx.season}, ${outdoorCtx.hemisphere} hemisphere\n` +
+        `Planting status: ${outdoorCtx.plantingStatus}\n` +
+        `Active risks: ${outdoorCtx.risks}`
+      );
+    }
+  }
 
   if (screen === "browse" && d?.strainName) {
     const typeMap = { I: "Indica", S: "Sativa", H: "Hybrid" };
@@ -53,23 +78,6 @@ function buildSystemMessage(screen, screenCtx, outdoorCtx) {
   }
 
   if (screen === "grow") {
-    const ctxScreen = screenCtx?.screen;
-
-    if (ctxScreen === "greenhouse" && d?.strainName) {
-      return (
-        base +
-        `The user is in GREENHOUSE mode — a real-time grow where 1 real day = 3 grow days.\n\n` +
-        `Strain: ${d.strainName} (${d.tier}, ${d.difficulty}, up to ${d.thcMax}% THC)\n` +
-        `Aroma: ${d.aroma}\n` +
-        `Day: ${d.day} of ${d.totalDays} · Stage: ${d.stage}\n` +
-        `What's happening: ${d.stageDesc}\n` +
-        `Grower tip: ${d.tip}\n` +
-        (d.isHarvest ? "Status: HARVEST READY — the plant has completed its cycle.\n" : "") +
-        (d.nextDayIn ? `Next grow day advances in: ${d.nextDayIn}\n` : "") +
-        "\nThis is a real-time simulation. Reference the exact day and stage. Give actionable advice as if monitoring a real plant at this stage."
-      );
-    }
-
     if (d?.strainName) {
       return (
         base +
@@ -407,18 +415,24 @@ export default function GrowverFAB({ screen, onOpenFull }) {
               </View>
 
               {/* Context indicator — shows what Growver knows about this screen */}
-              {(screen === "outdoor" ? weatherCtx.current : screenCtxRef.current?.data) && (
+              {(screen === "outdoor"
+                  ? (screenCtxRef.current?.screen === "greenhouse" || weatherCtx.current)
+                  : screenCtxRef.current?.data) && (
                 <View style={{ backgroundColor: "#0a1a0a", borderBottomWidth: 1, borderColor: C.border, paddingHorizontal: 14, paddingVertical: 7, flexDirection: "row", alignItems: "center", gap: 6 }}>
                   <Text style={{ fontSize: 11 }}>
-                    {screen === "outdoor" ? "🌤" : screen === "browse" ? "🌿" : screen === "grow" ? (screenCtxRef.current?.screen === "greenhouse" ? "🏡" : "🎮") : screen === "vpd" ? "💧" : "📋"}
+                    {screen === "outdoor" && screenCtxRef.current?.screen === "greenhouse" ? "🏡"
+                      : screen === "outdoor" ? "🌤"
+                      : screen === "browse" ? "🌿"
+                      : screen === "grow" ? "🎮"
+                      : screen === "vpd" ? "💧" : "📋"}
                   </Text>
                   <Text style={{ color: C.greenDim, fontFamily: MONO, fontSize: 10 }}>
-                    {screen === "outdoor" && weatherCtx.current
+                    {screen === "outdoor" && screenCtxRef.current?.screen === "greenhouse" && screenCtxRef.current?.data?.strainName
+                      ? `Greenhouse: ${screenCtxRef.current.data.strainName} · Day ${screenCtxRef.current.data.day} · ${screenCtxRef.current.data.stage}`
+                      : screen === "outdoor" && weatherCtx.current
                       ? `Weather-aware · ${weatherCtx.current.temp}°C · ${weatherCtx.current.city}`
                       : screen === "browse" && screenCtxRef.current?.data?.strainName
                       ? `Viewing: ${screenCtxRef.current.data.strainName}`
-                      : screen === "grow" && screenCtxRef.current?.screen === "greenhouse" && screenCtxRef.current?.data?.strainName
-                      ? `🏡 Greenhouse: ${screenCtxRef.current.data.strainName} · Day ${screenCtxRef.current.data.day} · ${screenCtxRef.current.data.stage}`
                       : screen === "grow" && screenCtxRef.current?.data?.strainName
                       ? `Growing: ${screenCtxRef.current.data.strainName} · Day ${screenCtxRef.current.data.day} · ${screenCtxRef.current.data.stage}`
                       : screen === "vpd" && screenCtxRef.current?.data?.vpd !== undefined

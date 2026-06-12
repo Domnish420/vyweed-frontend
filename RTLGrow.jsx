@@ -460,10 +460,11 @@ function WeekRewardModal({ visible, week, strain, metal, onClose }) {
 }
 
 // ── Main RTLGrow component ────────────────────────────────────────────────────
-export default function RTLGrow({ trophies, onAddTrophy, tokens, onEarnToken }) {
+export default function RTLGrow({ trophies, onAddTrophy, tokens, onEarnToken, onSpendToken }) {
   const [growData, setGrowData]       = useState(null);
   const [loadingGrow, setLoadingGrow] = useState(true);
   const [now, setNow]                 = useState(Date.now());
+  const [outdoorWeather, setOutdoorWeather] = useState(null);
   const [pickerVisible, setPickerVisible]           = useState(false);
   const [harvestModalVisible, setHarvestModalVisible] = useState(false);
   const [weekRewardVisible, setWeekRewardVisible]   = useState(false);
@@ -472,12 +473,15 @@ export default function RTLGrow({ trophies, onAddTrophy, tokens, onEarnToken }) 
   const [weekRewardNum, setWeekRewardNum]           = useState(null);
   const [weekRewardLoading, setWeekRewardLoading]   = useState(false);
 
-  // Load persisted grow on mount
+  // Load persisted grow + outdoor weather on mount
   useEffect(() => {
     AsyncStorage.getItem(RTL_STORAGE_KEY)
       .then(raw => { if (raw) setGrowData(JSON.parse(raw)); })
       .catch(() => {})
       .finally(() => setLoadingGrow(false));
+    AsyncStorage.getItem("vyweed_outdoor_weather")
+      .then(raw => { if (raw) setOutdoorWeather(JSON.parse(raw)); })
+      .catch(() => {});
   }, []);
 
   // Tick every 60 seconds to update current day + countdown
@@ -510,26 +514,30 @@ export default function RTLGrow({ trophies, onAddTrophy, tokens, onEarnToken }) 
     .find(w => !weeksClaimed.includes(w));
   const hasWeekReward   = nextUnclaimedWeek !== undefined && !growData?.harvestedAt;
 
-  // Sync Growver context whenever day/stage changes
+  // Sync Growver context whenever day/stage/weather changes
   useEffect(() => {
     if (!growData || !description) return;
     setGrowverContext("greenhouse", {
-      strainName:  growData.strainData.name,
-      strainType:  growData.strainData.type,
-      tier:        growData.strainData.tier,
-      difficulty:  growData.strainData.difficulty,
-      thcMax:      growData.strainData.thc_max,
-      aroma:       growData.strainData.aroma,
-      day:         currentDay,
+      strainName:   growData.strainData.name,
+      strainType:   growData.strainData.type,
+      tier:         growData.strainData.tier,
+      difficulty:   growData.strainData.difficulty,
+      thcMax:       growData.strainData.thc_max,
+      aroma:        growData.strainData.aroma,
+      day:          currentDay,
       totalDays,
-      stage:       description.stage,
-      stageDesc:   description.stageDesc,
-      tip:         description.tip,
+      stage:        description.stage,
+      stageDesc:    description.stageDesc,
+      tip:          description.tip,
       isHarvest,
-      rtlMode:     true,
-      nextDayIn:   isHarvest ? "harvest ready" : formatCountdown(msToNextDay),
+      rtlMode:      true,
+      nextDayIn:    isHarvest ? "harvest ready" : formatCountdown(msToNextDay),
+      outdoorTemp:  outdoorWeather?.temp,
+      outdoorHumidity: outdoorWeather?.humidity,
+      outdoorDesc:  outdoorWeather?.weatherDesc,
+      outdoorCity:  outdoorWeather?.city,
     });
-  }, [description, currentDay, isHarvest]);
+  }, [description, currentDay, isHarvest, outdoorWeather]);
 
   const startGrow = async (strain) => {
     const fw = strain.flower_wk_max || 9;
@@ -619,6 +627,15 @@ export default function RTLGrow({ trophies, onAddTrophy, tokens, onEarnToken }) 
     } catch {} finally {
       setWeekRewardLoading(false);
     }
+  };
+
+  const skipDay = async () => {
+    if (!growData || isHarvest || alreadyHarvested || tokens < 3 || !onSpendToken) return;
+    const ok = await onSpendToken(3);
+    if (!ok) return;
+    const updated = { ...growData, startedAt: growData.startedAt - MS_PER_GROW_DAY };
+    setGrowData(updated);
+    await AsyncStorage.setItem(RTL_STORAGE_KEY, JSON.stringify(updated)).catch(() => {});
   };
 
   // ── Loading ──
@@ -904,6 +921,84 @@ export default function RTLGrow({ trophies, onAddTrophy, tokens, onEarnToken }) 
               <Text style={{ color: C.green, fontFamily: HEADING, fontSize: 16 }}>+1 🎟</Text>
             </View>
           </TouchableOpacity>
+        )}
+
+        {/* ── Skip day button ─── */}
+        {!isHarvest && !alreadyHarvested && tokens >= 3 && (
+          <TouchableOpacity
+            onPress={skipDay}
+            style={{
+              marginHorizontal: 16, marginBottom: 10,
+              backgroundColor: "rgba(193,122,74,0.08)",
+              borderRadius: 14, borderWidth: 1, borderColor: "rgba(193,122,74,0.35)",
+              padding: 14, flexDirection: "row", alignItems: "center", gap: 12,
+            }}>
+            <Text style={{ fontSize: 22 }}>⏩</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: C.amber, fontFamily: HEADING, fontSize: 16, letterSpacing: 1 }}>
+                SKIP A DAY
+              </Text>
+              <Text style={{ color: "rgba(193,122,74,0.65)", fontFamily: SANS, fontSize: 11, marginTop: 1 }}>
+                Advance plant by 1 grow day — doesn't affect daily token claim
+              </Text>
+            </View>
+            <View style={{
+              backgroundColor: "rgba(193,122,74,0.12)",
+              borderRadius: 10, borderWidth: 1, borderColor: "rgba(193,122,74,0.40)",
+              paddingHorizontal: 10, paddingVertical: 6,
+            }}>
+              <Text style={{ color: C.amber, fontFamily: HEADING, fontSize: 15 }}>3 🎟</Text>
+            </View>
+          </TouchableOpacity>
+        )}
+
+        {/* ── Outdoor conditions card ─── */}
+        {outdoorWeather && (
+          <View style={{
+            marginHorizontal: 16, marginBottom: 10,
+            backgroundColor: "rgba(91,155,213,0.06)",
+            borderRadius: 14, borderWidth: 1, borderColor: "rgba(91,155,213,0.20)",
+            padding: 14,
+          }}>
+            <Text style={{ color: "rgba(91,155,213,0.70)", fontFamily: SANS_MED, fontSize: 10, letterSpacing: 2, marginBottom: 8 }}>
+              🌤  YOUR OUTDOOR CONDITIONS
+            </Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: C.blue, fontFamily: HEADING, fontSize: 28 }}>
+                  {outdoorWeather.temp}°C
+                </Text>
+                <Text style={{ color: C.greyLight, fontFamily: SANS, fontSize: 11, marginTop: 2 }}>
+                  {outdoorWeather.weatherDesc}
+                </Text>
+                {outdoorWeather.city ? (
+                  <Text style={{ color: C.grey, fontFamily: SANS, fontSize: 10, marginTop: 2 }}>
+                    📍 {outdoorWeather.city}
+                  </Text>
+                ) : null}
+              </View>
+              <View style={{ gap: 4 }}>
+                {outdoorWeather.humidity !== undefined && (
+                  <Text style={{ color: C.greyLight, fontFamily: SANS, fontSize: 11 }}>
+                    💧 {outdoorWeather.humidity}% humidity
+                  </Text>
+                )}
+                {outdoorWeather.wind !== undefined && (
+                  <Text style={{ color: C.greyLight, fontFamily: SANS, fontSize: 11 }}>
+                    💨 {outdoorWeather.wind}km/h wind
+                  </Text>
+                )}
+                {outdoorWeather.uv !== undefined && (
+                  <Text style={{ color: C.greyLight, fontFamily: SANS, fontSize: 11 }}>
+                    ☀️ UV {outdoorWeather.uv}
+                  </Text>
+                )}
+              </View>
+            </View>
+            <Text style={{ color: "rgba(91,155,213,0.50)", fontFamily: SANS, fontSize: 10, marginTop: 8 }}>
+              Your plant is experiencing these real outdoor conditions
+            </Text>
+          </View>
         )}
 
         {/* ── Harvest button ─── */}

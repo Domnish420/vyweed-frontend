@@ -1,21 +1,22 @@
 /**
  * OutdoorGuide.jsx
  * Real-time weather + outdoor growing intelligence
- * - expo-location for device GPS + reverse geocoding
- * - Open-Meteo (free, no key) for live conditions + 7-day forecast
- * - Growver weather context saved to AsyncStorage so the AI
- *   knows exactly what's happening outside when you ask it questions
+ * + GREENHOUSE mode — grow a real strain using your actual outdoor conditions
  */
 
 import React, { useState, useEffect } from "react";
 import {
   View, Text, ScrollView, TouchableOpacity,
-  ActivityIndicator, Platform, StatusBar,
+  ActivityIndicator, Platform, StatusBar, Alert,
 } from "react-native";
 import * as Location from "expo-location";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import RTLGrow from "./RTLGrow";
 
-const MONO = Platform.select({ ios: "Courier New", android: "monospace" });
+const MONO   = Platform.select({ ios: "Courier New", android: "monospace" });
+const HEADING = "BebasNeue_400Regular";
+const SANS    = "SpaceGrotesk_400Regular";
+const SANS_MED = "SpaceGrotesk_500Medium";
 
 const C = {
   bg: "#070a07", surface: "#0d120d", card: "#111811",
@@ -23,6 +24,20 @@ const C = {
   greenDim: "#1a7a20", amber: "#ffb830", red: "#ff3a3a",
   blue: "#30d5ff", purple: "#c084fc", white: "#e8f0e8",
   grey: "#4a5a4a", greyLight: "#8a9a8a",
+};
+
+// Glassmorphic palette used for the greenhouse header to match RTLGrow
+const GC = {
+  bg:          "#0B0D0C",
+  border:      "rgba(255,255,255,0.08)",
+  borderFaint: "rgba(255,255,255,0.05)",
+  green:       "#3dffa0",
+  greenFaint:  "rgba(61,255,160,0.08)",
+  greenDim:    "rgba(61,255,160,0.4)",
+  amber:       "#c17a4a",
+  grey:        "rgba(232,228,217,0.28)",
+  greyLight:   "rgba(232,228,217,0.52)",
+  white:       "#e8e4d9",
 };
 
 function Label({ children, style }) {
@@ -57,7 +72,6 @@ function wmoIcon(code) {
   return "⛈";
 }
 
-// ── Season + growing advice ────────────────────────────────────────────────────
 function getSeason(month, isNorthern) {
   if (isNorthern) {
     if (month >= 3 && month <= 5)  return "spring";
@@ -74,7 +88,6 @@ function getSeason(month, isNorthern) {
 function getGrowingAdvice(month, lat, weather) {
   const isNorthern = lat >= 0;
   const temp     = weather?.current?.temperature_2m;
-  const feelsLike = weather?.current?.apparent_temperature;
   const humidity = weather?.current?.relative_humidity_2m;
   const wind     = weather?.current?.wind_speed_10m;
 
@@ -159,23 +172,12 @@ function windDirection(deg) {
   return dirs[Math.round(deg / 45) % 8];
 }
 
-// ── Build the context object saved to AsyncStorage for Growver ─────────────────
 function buildGrowverContext({ city, country, lat, lon, weather, daylightHours, season, isNorthern, advice }) {
   const cur = weather?.current || {};
   const daylightZone = daylightHours >= 14 ? "VEGE ZONE" : daylightHours >= 12 ? "TRANSITION" : "FLOWER TRIGGER";
   const riskSummary  = advice.risks.length
     ? advice.risks.map(r => r.text.replace(/^[^\w]+/, "")).join("; ")
     : "none";
-
-  const summary =
-    `${Math.round(cur.temperature_2m ?? 0)}°C (feels ${Math.round(cur.apparent_temperature ?? 0)}°C), ` +
-    `${cur.relative_humidity_2m ?? "?"}% humidity, ` +
-    `${Math.round(cur.wind_speed_10m ?? 0)}km/h wind, ` +
-    `UV ${cur.uv_index ?? "N/A"}, ` +
-    `${daylightHours}h daylight (${daylightZone}), ` +
-    `${season} in ${isNorthern ? "Northern" : "Southern"} hemisphere. ` +
-    `${advice.planting.label}. ` +
-    `Risks: ${riskSummary}.`;
 
   return {
     city: city || "Unknown",
@@ -195,13 +197,49 @@ function buildGrowverContext({ city, country, lat, lon, weather, daylightHours, 
     hemisphere: isNorthern ? "Northern" : "Southern",
     plantingStatus: advice.planting.label,
     risks: riskSummary,
-    summary,
     updatedAt: Date.now(),
   };
 }
 
+// ── WEATHER / GREENHOUSE mode toggle ─────────────────────────────────────────
+function ModeToggle({ view, setView }) {
+  return (
+    <View style={{ flexDirection: "row", gap: 8, marginTop: 10 }}>
+      {[
+        { key: "weather",    label: "🌤 WEATHER" },
+        { key: "greenhouse", label: "🏡 GREENHOUSE" },
+      ].map(({ key, label }) => (
+        <TouchableOpacity
+          key={key}
+          onPress={() => setView(key)}
+          style={{
+            flex: 1, paddingVertical: 9, borderRadius: 10,
+            backgroundColor: key === "greenhouse"
+              ? (view === key ? GC.greenFaint : "rgba(255,255,255,0.02)")
+              : (view === key ? "#0d3d12" : "rgba(255,255,255,0.02)"),
+            borderWidth: 1,
+            borderColor: key === "greenhouse"
+              ? (view === key ? GC.greenDim : "rgba(255,255,255,0.06)")
+              : (view === key ? C.greenDim : "#1a2a1a"),
+            alignItems: "center",
+          }}>
+          <Text style={{
+            color: key === "greenhouse"
+              ? (view === key ? GC.green : "rgba(232,228,217,0.30)")
+              : (view === key ? C.green : C.grey),
+            fontFamily: HEADING, fontSize: 14, letterSpacing: 1,
+          }}>
+            {label}
+          </Text>
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
+}
+
 // ── Main Screen ────────────────────────────────────────────────────────────────
-export default function OutdoorGuide() {
+export default function OutdoorGuide({ trophies, onAddTrophy, tokens, onEarnToken, onSpendToken }) {
+  const [view, setView]                 = useState("weather"); // "weather" | "greenhouse"
   const [location, setLocation]         = useState(null);
   const [locationName, setLocationName] = useState(null);
   const [weather, setWeather]           = useState(null);
@@ -219,7 +257,6 @@ export default function OutdoorGuide() {
     setGrowverSynced(false);
 
     try {
-      // ── 1. Permission ──────────────────────────────────────────────────────
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== "granted") {
         setPermDenied(true);
@@ -227,23 +264,18 @@ export default function OutdoorGuide() {
         return;
       }
 
-      // ── 2. GPS position ────────────────────────────────────────────────────
-      const pos = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-      });
+      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
       const { latitude, longitude } = pos.coords;
       setLocation({ lat: latitude, lon: longitude });
 
-      // ── 3. Reverse geocode for city name ───────────────────────────────────
       let city = null, country = null;
       try {
         const [geo] = await Location.reverseGeocodeAsync({ latitude, longitude });
         city    = geo?.city || geo?.subregion || geo?.district || null;
         country = geo?.country || null;
         setLocationName(city && country ? `${city}, ${country}` : country || null);
-      } catch { /* non-fatal */ }
+      } catch {}
 
-      // ── 4. Weather from Open-Meteo (free, no key) ──────────────────────────
       const url =
         `https://api.open-meteo.com/v1/forecast` +
         `?latitude=${latitude}&longitude=${longitude}` +
@@ -257,7 +289,6 @@ export default function OutdoorGuide() {
       const data = await res.json();
       setWeather(data);
 
-      // ── 5. Save context for Growver ────────────────────────────────────────
       const month      = new Date().getMonth() + 1;
       const isNorthern = latitude >= 0;
       const season     = getSeason(month, isNorthern);
@@ -288,6 +319,51 @@ export default function OutdoorGuide() {
   const SEASON_ICONS = { spring: "🌱", summer: "☀️", autumn: "🍂", winter: "❄️" };
   const SEASON_COLS  = { spring: C.green, summer: C.amber, autumn: "#ff8c30", winter: C.blue };
 
+  // ── Greenhouse mode ──────────────────────────────────────────────────────────
+  if (view === "greenhouse") {
+    return (
+      <View style={{ flex: 1, backgroundColor: GC.bg }}>
+        {/* Header — glassmorphic palette to match RTLGrow */}
+        <View style={{
+          paddingHorizontal: 16,
+          paddingTop: Platform.OS === "android" ? (StatusBar.currentHeight || 24) + 12 : 52,
+          paddingBottom: 14, borderBottomWidth: 1, borderColor: GC.border,
+          backgroundColor: GC.bg,
+        }}>
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end" }}>
+            <View>
+              <Text style={{ color: GC.white, fontFamily: HEADING, fontSize: 36, letterSpacing: 3 }}>
+                VY<Text style={{ color: GC.green }}>WEED</Text>
+              </Text>
+              <Text style={{ color: GC.greyLight, fontFamily: SANS, fontSize: 10, letterSpacing: 2 }}>
+                GREENHOUSE · OUTDOOR MODE
+              </Text>
+            </View>
+            {/* Token count */}
+            <View style={{
+              backgroundColor: GC.greenFaint,
+              borderRadius: 20, borderWidth: 1, borderColor: GC.greenDim,
+              paddingHorizontal: 12, paddingVertical: 6,
+              flexDirection: "row", alignItems: "center", gap: 5,
+            }}>
+              <Text style={{ color: GC.green, fontFamily: HEADING, fontSize: 18 }}>{tokens ?? 0}</Text>
+              <Text style={{ fontSize: 16 }}>🎟</Text>
+            </View>
+          </View>
+          <ModeToggle view={view} setView={setView} />
+        </View>
+
+        <RTLGrow
+          onAddTrophy={onAddTrophy}
+          tokens={tokens}
+          onEarnToken={onEarnToken}
+          onSpendToken={onSpendToken}
+        />
+      </View>
+    );
+  }
+
+  // ── Weather mode ─────────────────────────────────────────────────────────────
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
       {/* ── Header ──────────────────────────────────────────────────────────── */}
@@ -322,7 +398,6 @@ export default function OutdoorGuide() {
           </View>
         </View>
 
-        {/* Location name + coords */}
         {!loading && !error && location && (
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 8 }}>
             <Text style={{ fontSize: 12 }}>📍</Text>
@@ -336,19 +411,18 @@ export default function OutdoorGuide() {
             )}
           </View>
         )}
+
+        {/* WEATHER / GREENHOUSE toggle */}
+        <ModeToggle view={view} setView={setView} />
       </View>
 
-      {/* ── Loading ──────────────────────────────────────────────────────────── */}
       {loading ? (
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 14 }}>
           <ActivityIndicator color={C.green} size="large" />
-          <Text style={{ color: C.grey, fontFamily: MONO, fontSize: 12 }}>
-            GETTING YOUR LOCATION...
-          </Text>
+          <Text style={{ color: C.grey, fontFamily: MONO, fontSize: 12 }}>GETTING YOUR LOCATION...</Text>
         </View>
 
       ) : error ? (
-        /* ── Error ──────────────────────────────────────────────────────────── */
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 32 }}>
           <Text style={{ fontSize: 48 }}>📍</Text>
           <Text style={{ color: C.amber, fontFamily: MONO, fontSize: 14, fontWeight: "bold", marginTop: 16 }}>
@@ -368,10 +442,9 @@ export default function OutdoorGuide() {
         </View>
 
       ) : (
-        /* ── Main content ────────────────────────────────────────────────────── */
         <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 50 }}>
 
-          {/* ── Current conditions ───────────────────────────────────────────── */}
+          {/* Current conditions */}
           {weather?.current && (
             <View style={{ backgroundColor: C.card, borderRadius: 10, borderWidth: 1, borderColor: C.border, padding: 16, marginBottom: 12 }}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 }}>
@@ -383,7 +456,6 @@ export default function OutdoorGuide() {
                   </Text>
                 </View>
               </View>
-
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
                 {[
                   { label: "TEMP",     value: `${Math.round(weather.current.temperature_2m)}°C`,          colour: C.red },
@@ -398,16 +470,14 @@ export default function OutdoorGuide() {
                     padding: 10, alignItems: "center", minWidth: 72, flex: 1,
                   }}>
                     <Label style={{ fontSize: 8 }}>{label}</Label>
-                    <Text style={{ color: colour, fontFamily: MONO, fontSize: 15, fontWeight: "bold", marginTop: 4 }}>
-                      {value}
-                    </Text>
+                    <Text style={{ color: colour, fontFamily: MONO, fontSize: 15, fontWeight: "bold", marginTop: 4 }}>{value}</Text>
                   </View>
                 ))}
               </View>
             </View>
           )}
 
-          {/* ── Season + daylight bar ─────────────────────────────────────────── */}
+          {/* Season + daylight bar */}
           <View style={{
             backgroundColor: `${SEASON_COLS[season]}15`, borderRadius: 10,
             borderWidth: 1, borderColor: SEASON_COLS[season], padding: 16, marginBottom: 12,
@@ -423,7 +493,6 @@ export default function OutdoorGuide() {
                 </Text>
               </View>
             </View>
-
             {daylightH && (
               <>
                 <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 4 }}>
@@ -446,7 +515,7 @@ export default function OutdoorGuide() {
             )}
           </View>
 
-          {/* ── Planting advice ───────────────────────────────────────────────── */}
+          {/* Planting advice */}
           {advice?.planting && (
             <View style={{
               backgroundColor: `${advice.planting.colour}15`, borderRadius: 10,
@@ -462,7 +531,7 @@ export default function OutdoorGuide() {
             </View>
           )}
 
-          {/* ── Harvest status ────────────────────────────────────────────────── */}
+          {/* Harvest status */}
           {advice?.harvest && (
             <View style={{
               backgroundColor: `${advice.harvest.colour}15`, borderRadius: 10,
@@ -478,7 +547,7 @@ export default function OutdoorGuide() {
             </View>
           )}
 
-          {/* ── Current risks ─────────────────────────────────────────────────── */}
+          {/* Current risks */}
           {advice?.risks?.length > 0 && (
             <View style={{ marginBottom: 12 }}>
               <Label style={{ marginBottom: 8 }}>CURRENT RISKS</Label>
@@ -500,7 +569,7 @@ export default function OutdoorGuide() {
             </View>
           )}
 
-          {/* ── 7-day forecast ────────────────────────────────────────────────── */}
+          {/* 7-day forecast */}
           {weather?.daily && (
             <View style={{ backgroundColor: C.card, borderRadius: 10, borderWidth: 1, borderColor: C.border, padding: 14, marginBottom: 12 }}>
               <Label style={{ marginBottom: 10 }}>7-DAY FORECAST</Label>
@@ -530,9 +599,7 @@ export default function OutdoorGuide() {
                           {Math.round(minT)}°
                         </Text>
                         {rainPct > 20 && (
-                          <Text style={{ color: C.blue, fontFamily: MONO, fontSize: 9, marginTop: 3 }}>
-                            💧{rainPct}%
-                          </Text>
+                          <Text style={{ color: C.blue, fontFamily: MONO, fontSize: 9, marginTop: 3 }}>💧{rainPct}%</Text>
                         )}
                         {isCold && <Text style={{ color: C.blue, fontFamily: MONO, fontSize: 9, marginTop: 2 }}>❄️</Text>}
                       </View>
@@ -543,7 +610,7 @@ export default function OutdoorGuide() {
             </View>
           )}
 
-          {/* ── Growver callout ───────────────────────────────────────────────── */}
+          {/* Growver callout */}
           {growverSynced && (
             <View style={{
               backgroundColor: C.greenFaint, borderRadius: 10, borderWidth: 1, borderColor: C.greenDim,
@@ -559,20 +626,25 @@ export default function OutdoorGuide() {
             </View>
           )}
 
-          {/* ── Upcoming features callout ─────────────────────────────────────── */}
-          <View style={{
-            backgroundColor: "#0d0d1a", borderRadius: 10, borderWidth: 1, borderColor: "#3a3a6a",
-            padding: 14,
-          }}>
-            <Label style={{ color: "#8080c0", marginBottom: 6 }}>🚀 COMING SOON</Label>
-            <Text style={{ color: "#a0a0d0", fontFamily: MONO, fontSize: 11, lineHeight: 18 }}>
-              {"• Outdoor grow sim — grow a strain with real-time weather effects\n" +
-               "• Sandbox mode — test different strains against any climate\n" +
-               "• Frost alerts + harvest window notifications\n" +
-               "• Strain recommendations based on your local climate\n" +
-               "• Full subscription tier features"}
+          {/* Greenhouse callout */}
+          <TouchableOpacity
+            onPress={() => setView("greenhouse")}
+            style={{
+              backgroundColor: "#0d1a0d", borderRadius: 10,
+              borderWidth: 1.5, borderColor: "#1a7a20",
+              padding: 16,
+            }}>
+            <Text style={{ color: C.green, fontFamily: MONO, fontSize: 13, fontWeight: "bold", marginBottom: 6 }}>
+              🏡 GREENHOUSE MODE
             </Text>
-          </View>
+            <Text style={{ color: C.greyLight, fontFamily: MONO, fontSize: 11, lineHeight: 18 }}>
+              Grow any strain in real time using your actual outdoor conditions. 1 real day = 3 grow days.
+              Growver monitors your plant and factors in your local weather.
+            </Text>
+            <Text style={{ color: C.green, fontFamily: MONO, fontSize: 11, marginTop: 8 }}>
+              TAP TO OPEN →
+            </Text>
+          </TouchableOpacity>
 
         </ScrollView>
       )}

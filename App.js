@@ -152,6 +152,49 @@ function AppInner() {
   const [growCount, setGrowCount]   = useState(0);
   const { mode, isIRL, isVirtual }  = useAppMode();
 
+  // Shared trophy + token state — spans GROW (spending) and OUTDOOR (earning)
+  const [trophies, setTrophies] = useState([]);
+  const [tokens,   setTokens]   = useState(0);
+
+  useEffect(() => {
+    AsyncStorage.getItem("vyweed_trophies")
+      .then(raw => { if (raw) setTrophies(JSON.parse(raw)); })
+      .catch(() => {});
+    AsyncStorage.getItem("vyweed_tokens")
+      .then(raw => { if (raw) setTokens(parseInt(raw, 10) || 0); })
+      .catch(() => {});
+  }, []);
+
+  const addTrophy = async (trophy) => {
+    const updated = [...trophies, trophy];
+    setTrophies(updated);
+    await AsyncStorage.setItem("vyweed_trophies", JSON.stringify(updated)).catch(() => {});
+  };
+
+  const earnToken = async (count = 1) => {
+    const n = tokens + count;
+    setTokens(n);
+    await AsyncStorage.setItem("vyweed_tokens", String(n)).catch(() => {});
+  };
+
+  // Returns true if a token was successfully spent
+  const spendToken = async () => {
+    if (tokens <= 0) return false;
+    const n = tokens - 1;
+    setTokens(n);
+    await AsyncStorage.setItem("vyweed_tokens", String(n)).catch(() => {});
+    return true;
+  };
+
+  // Atomic multi-token spend — returns true if count tokens were available and spent
+  const spendTokens = async (count = 1) => {
+    if (tokens < count) return false;
+    const n = tokens - count;
+    setTokens(n);
+    await AsyncStorage.setItem("vyweed_tokens", String(n)).catch(() => {});
+    return true;
+  };
+
   // Handle notification taps
   useEffect(() => {
     const sub = addNotificationResponseListener(response => {
@@ -205,12 +248,24 @@ function AppInner() {
 
         {/* GROW GAME */}
         <View style={{ flex: 1, display: activeTab === "grow" ? "flex" : "none" }}>
-          <VirtualGrow />
+          <VirtualGrow
+            trophies={trophies}
+            onAddTrophy={addTrophy}
+            tokens={tokens}
+            onSpendToken={spendToken}
+            activeTab={activeTab}
+          />
         </View>
 
         {/* OUTDOOR GUIDE */}
         <View style={{ flex: 1, display: activeTab === "outdoor" ? "flex" : "none" }}>
-          <OutdoorGuide />
+          <OutdoorGuide
+            trophies={trophies}
+            onAddTrophy={addTrophy}
+            tokens={tokens}
+            onEarnToken={earnToken}
+            onSpendToken={spendTokens}
+          />
         </View>
 
         {/* VPD CALCULATOR */}

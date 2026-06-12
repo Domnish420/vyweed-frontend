@@ -25,7 +25,6 @@ import { cachedFetch } from "./cache";
 import { useAppMode } from "./AppMode";
 import { scheduleWaitTimerNotification } from "./notifications";
 import { setGrowverContext } from "./growverContext";
-import RTLGrow from "./RTLGrow";
 
 const { width: SW } = Dimensions.get("window");
 import { API_V1 as API_BASE } from "./apiConfig";
@@ -523,45 +522,12 @@ function TrophyCollection({ trophies, onBack }) {
   );
 }
 
-// ── GACHA / GREENHOUSE toggle ─────────────────────────────────────────────────
-function ViewModeToggle({ view, setView }) {
-  return (
-    <View style={{ flexDirection: "row", gap: 8, marginTop: 10 }}>
-      {[
-        { key: "gacha",      label: "🎰 GACHA" },
-        { key: "greenhouse", label: "🏡 GREENHOUSE" },
-      ].map(({ key, label }) => (
-        <TouchableOpacity
-          key={key}
-          onPress={() => setView(key)}
-          style={{
-            flex: 1, paddingVertical: 10, borderRadius: 10,
-            backgroundColor: view === key ? C.greenFaint : "rgba(255,255,255,0.02)",
-            borderWidth: 1,
-            borderColor: view === key ? C.greenDim : C.borderFaint,
-            alignItems: "center",
-          }}>
-          <Text style={{
-            color: view === key ? C.green : C.grey,
-            fontFamily: HEADING, fontSize: 14, letterSpacing: 1,
-          }}>
-            {label}
-          </Text>
-        </TouchableOpacity>
-      ))}
-    </View>
-  );
-}
-
 // ── Main Virtual Grow Screen ──────────────────────────────────────────────────
-export default function VirtualGrow() {
+export default function VirtualGrow({ trophies, onAddTrophy, tokens, onSpendToken, activeTab }) {
   const [screen, setScreen]         = useState("main");
-  const [view, setView]             = useState("gacha"); // "gacha" | "greenhouse"
   const [strain, setStrain]         = useState(null);
   const [loading, setLoading]       = useState(true);
   const [day, setDay]               = useState(1);
-  const [trophies, setTrophies]     = useState([]);
-  const [tokens, setTokens]         = useState(0);
   const [showShelve, setShowShelve] = useState(false);
   const [alreadyShelved, setAlreadyShelved] = useState(false);
   const [timerRemaining, setTimerRemaining] = useState(0);
@@ -571,14 +537,6 @@ export default function VirtualGrow() {
   const { isIRL } = useAppMode();
   const fadeAnim = useRef(new Animated.Value(1)).current;
 
-  useEffect(() => {
-    AsyncStorage.getItem("vyweed_trophies")
-      .then(raw => { if (raw) setTrophies(JSON.parse(raw)); })
-      .catch(() => {});
-    AsyncStorage.getItem("vyweed_tokens")
-      .then(raw => { if (raw) setTokens(parseInt(raw, 10) || 0); })
-      .catch(() => {});
-  }, []);
 
   useEffect(() => {
     checkTimer();
@@ -723,13 +681,12 @@ export default function VirtualGrow() {
       date:       todayKey,
       earnedAt:   Date.now(),
     };
-    const updated = [...trophies, trophy];
-    setTrophies(updated);
-    await AsyncStorage.setItem("vyweed_trophies", JSON.stringify(updated)).catch(() => {});
+    await onAddTrophy(trophy);
     setAlreadyShelved(true);
 
-    const waitSecs = getWaitSeconds(updated.length);
-    await startTimer(updated.length);
+    const newCount = trophies.length + 1;
+    const waitSecs = getWaitSeconds(newCount);
+    await startTimer(newCount);
     await scheduleWaitTimerNotification(waitSecs, "your next strain").catch(() => {});
 
     setTimerRemaining(waitSecs);
@@ -737,68 +694,6 @@ export default function VirtualGrow() {
     startCountdown(waitSecs);
   };
 
-  // Trophy add without gacha timer — used by RTLGrow greenhouse harvests
-  const addTrophy = async (trophy) => {
-    const updated = [...trophies, trophy];
-    setTrophies(updated);
-    await AsyncStorage.setItem("vyweed_trophies", JSON.stringify(updated)).catch(() => {});
-  };
-
-  const earnToken = async (count = 1) => {
-    const n = tokens + count;
-    setTokens(n);
-    await AsyncStorage.setItem("vyweed_tokens", String(n)).catch(() => {});
-  };
-
-  // Returns true if a token was successfully spent
-  const spendToken = async () => {
-    if (tokens <= 0) return false;
-    const n = tokens - 1;
-    setTokens(n);
-    await AsyncStorage.setItem("vyweed_tokens", String(n)).catch(() => {});
-    return true;
-  };
-
-  // ── Greenhouse mode — render RTLGrow with shared header ──────────────────────
-  if (view === "greenhouse" && screen !== "collection") {
-    return (
-      <View style={{ flex: 1, backgroundColor: C.bg }}>
-        <View style={{
-          paddingHorizontal: 16,
-          paddingTop: Platform.OS === "android" ? (StatusBar.currentHeight || 24) + 12 : 52,
-          paddingBottom: 14, borderBottomWidth: 1, borderColor: C.border,
-        }}>
-          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end" }}>
-            <View>
-              <Text style={{ color: C.white, fontFamily: HEADING, fontSize: 36, letterSpacing: 3 }}>
-                VY<Text style={{ color: C.green }}>WEED</Text>
-              </Text>
-              <Text style={{ color: C.greyLight, fontFamily: SANS, fontSize: 10, letterSpacing: 2 }}>
-                GREENHOUSE
-              </Text>
-            </View>
-            <View style={{ flexDirection: "row", gap: 12, alignItems: "center" }}>
-              {/* Token badge */}
-              <View style={{ alignItems: "center" }}>
-                <Text style={{ fontSize: 18 }}>🎟</Text>
-                <Text style={{ color: C.green, fontFamily: HEADING, fontSize: 16, lineHeight: 18 }}>
-                  {tokens}
-                </Text>
-              </View>
-              <TouchableOpacity onPress={() => setScreen("collection")} style={{ alignItems: "center" }}>
-                <Text style={{ fontSize: 22 }}>🏆</Text>
-                <Text style={{ color: C.amber, fontFamily: HEADING, fontSize: 18, lineHeight: 20 }}>
-                  {trophies.length}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-          <ViewModeToggle view={view} setView={setView} />
-        </View>
-        <RTLGrow trophies={trophies} onAddTrophy={addTrophy} tokens={tokens} onEarnToken={earnToken} />
-      </View>
-    );
-  }
 
   // ── Waiting screen (full-screen fallback — only when strain pool not loaded) ──
   if (timerActive && timerRemaining > 0 && !isIRL && !strain) {
@@ -878,7 +773,7 @@ export default function VirtualGrow() {
           {/* Token skip */}
           <TouchableOpacity
             onPress={async () => {
-              const spent = await spendToken();
+              const spent = await onSpendToken();
               if (!spent) { Alert.alert("No Tokens", "Check in on your greenhouse daily to earn tokens."); return; }
               await skipTimer();
               setTimerActive(false);
@@ -1070,8 +965,6 @@ export default function VirtualGrow() {
           </View>
         </View>
 
-        {/* GACHA / GREENHOUSE toggle */}
-        <ViewModeToggle view={view} setView={setView} />
       </View>
 
       <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
@@ -1116,7 +1009,7 @@ export default function VirtualGrow() {
               loadNextStrain();
             }}
             onSkipToken={async () => {
-              const spent = await spendToken();
+              const spent = await onSpendToken();
               if (!spent) { Alert.alert("No Tokens", "Check in on your greenhouse daily to earn tokens."); return; }
               await skipTimer();
               setTimerActive(false);
