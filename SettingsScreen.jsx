@@ -122,7 +122,7 @@ export default function SettingsScreen() {
   const [testing, setTesting]   = useState(false);
   const [saved, setSaved]       = useState(false);
   const [showInfo, setShowInfo] = useState(false);
-  const { mode, setMode, isIRL } = useAppMode();
+  const { mode, setMode, isIRL, isPro, setIsPro } = useAppMode();
 
   // Load saved settings
   useEffect(() => {
@@ -265,6 +265,33 @@ export default function SettingsScreen() {
             </Text>
           )}
         </View>
+
+        {/* MAX / Pro tier toggle (beta test) */}
+        <Section title="TIER (BETA)">
+          <View style={{ paddingVertical: 12, paddingHorizontal: 14 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: C.white, fontFamily: MONO, fontSize: 13 }}>
+                  MAX MODE
+                </Text>
+                <Text style={{ color: C.grey, fontFamily: MONO, fontSize: 10, marginTop: 3 }}>
+                  {isPro
+                    ? "⭐ Active — 8 seeds, 5 re-rolls per grow cycle"
+                    : "Free — 4 seeds, 1 re-roll per grow cycle"}
+                </Text>
+              </View>
+              <Switch
+                value={isPro}
+                onValueChange={setIsPro}
+                trackColor={{ false: C.border, true: C.greenDim }}
+                thumbColor={isPro ? C.green : C.grey}
+              />
+            </View>
+            <Text style={{ color: C.grey, fontFamily: MONO, fontSize: 10, marginTop: 8 }}>
+              Toggle for testing — will be locked to subscription at launch
+            </Text>
+          </View>
+        </Section>
 
         {/* Backend connection */}
         <Section title="BACKEND">

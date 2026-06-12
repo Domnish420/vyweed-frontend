@@ -10,6 +10,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { cachedFetch } from "./cache";
 import { setGrowverContext } from "./growverContext";
 import { API_V1 as API_BASE } from "./apiConfig";
+import SeedTray from "./SeedTray";
 
 const { width: SW } = Dimensions.get("window");
 
@@ -465,6 +466,7 @@ export default function RTLGrow({ trophies, onAddTrophy, tokens, onEarnToken, on
   const [loadingGrow, setLoadingGrow] = useState(true);
   const [now, setNow]                 = useState(Date.now());
   const [outdoorWeather, setOutdoorWeather] = useState(null);
+  const [showSeedTray, setShowSeedTray]     = useState(false);
   const [pickerVisible, setPickerVisible]           = useState(false);
   const [harvestModalVisible, setHarvestModalVisible] = useState(false);
   const [weekRewardVisible, setWeekRewardVisible]   = useState(false);
@@ -489,6 +491,9 @@ export default function RTLGrow({ trophies, onAddTrophy, tokens, onEarnToken, on
     const interval = setInterval(() => setNow(Date.now()), 60_000);
     return () => clearInterval(interval);
   }, []);
+
+  // Count completed greenhouse grows (for seed tray difficulty matching)
+  const growsCompleted = (trophies || []).filter(t => t.source === "greenhouse").length;
 
   // Derived values
   const totalDays  = growData?.totalDays ?? 91;
@@ -649,13 +654,30 @@ export default function RTLGrow({ trophies, onAddTrophy, tokens, onEarnToken, on
 
   // ── No active grow / post-harvest ──
   if (!growData || (alreadyHarvested && !harvestModalVisible)) {
+    // Seed tray — replaces strain picker as the primary start-grow flow
+    if (showSeedTray) {
+      return (
+        <View style={{ flex: 1, backgroundColor: C.bg }}>
+          {/* Manual search modal (escape hatch from seed tray) */}
+          <StrainPickerModal
+            visible={pickerVisible}
+            onClose={() => setPickerVisible(false)}
+            onSelect={(strain) => { startGrow(strain); setShowSeedTray(false); }}
+          />
+          <SeedTray
+            trophies={trophies}
+            outdoorWeather={outdoorWeather}
+            growsCompleted={growsCompleted}
+            onSelectStrain={(strain) => { startGrow(strain); setShowSeedTray(false); }}
+            onBack={() => setShowSeedTray(false)}
+            onSearchAll={() => setPickerVisible(true)}
+          />
+        </View>
+      );
+    }
+
     return (
       <View style={{ flex: 1, backgroundColor: C.bg }}>
-        <StrainPickerModal
-          visible={pickerVisible}
-          onClose={() => setPickerVisible(false)}
-          onSelect={startGrow}
-        />
         <ScrollView contentContainerStyle={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 32 }}>
           <Text style={{ fontSize: 60, marginBottom: 12 }}>🏡</Text>
 
@@ -665,7 +687,7 @@ export default function RTLGrow({ trophies, onAddTrophy, tokens, onEarnToken, on
                 HARVEST COMPLETE
               </Text>
               <Text style={{ color: C.greyLight, fontFamily: SANS, fontSize: 13, marginTop: 10, textAlign: "center", lineHeight: 20 }}>
-                {growData?.strainData?.name} has been added to your collection.{"\n"}Ready to start your next grow?
+                {growData?.strainData?.name} has been added to your collection.{"\n"}Ready for your next grow?
               </Text>
             </>
           ) : (
@@ -674,13 +696,13 @@ export default function RTLGrow({ trophies, onAddTrophy, tokens, onEarnToken, on
                 GREENHOUSE
               </Text>
               <Text style={{ color: C.greyLight, fontFamily: SANS, fontSize: 13, marginTop: 10, textAlign: "center", lineHeight: 20 }}>
-                Grow any strain from our database in real time.{"\n"}Growver monitors your plant every step of the way.
+                Seeds matched to your outdoor environment.{"\n"}Growver monitors your plant every step of the way.
               </Text>
             </>
           )}
 
           <TouchableOpacity
-            onPress={() => setPickerVisible(true)}
+            onPress={() => setShowSeedTray(true)}
             style={{
               marginTop: 28, width: "100%",
               backgroundColor: C.greenFaint,
@@ -688,7 +710,10 @@ export default function RTLGrow({ trophies, onAddTrophy, tokens, onEarnToken, on
               paddingVertical: 18, alignItems: "center",
             }}>
             <Text style={{ color: C.green, fontFamily: HEADING, fontSize: 22, letterSpacing: 2 }}>
-              {alreadyHarvested ? "PLANT AGAIN →" : "START A GROW →"}
+              {alreadyHarvested ? "PICK YOUR NEXT SEED →" : "PICK A SEED →"}
+            </Text>
+            <Text style={{ color: C.greenDim, fontFamily: SANS, fontSize: 11, marginTop: 4 }}>
+              Matched to your {outdoorWeather?.season || "local"} conditions
             </Text>
           </TouchableOpacity>
 
@@ -719,10 +744,10 @@ export default function RTLGrow({ trophies, onAddTrophy, tokens, onEarnToken, on
               HOW IT WORKS
             </Text>
             {[
-              "Pick any strain from 5,042 in our database",
+              "Get seeds matched to your outdoor season and temperature",
               "Your plant advances 3 grow days for every real day",
-              "Growver reads your plant's current stage and gives live advice",
-              "Harvest when ready — earn a trophy for your collection",
+              "Growver reads your plant's stage and gives live advice",
+              "Harvest when ready — earn a trophy you don't already have",
             ].map((step, i) => (
               <View key={i} style={{ flexDirection: "row", gap: 10, marginBottom: 8 }}>
                 <Text style={{ color: C.greenDim, fontFamily: HEADING, fontSize: 14, lineHeight: 20 }}>
@@ -735,6 +760,27 @@ export default function RTLGrow({ trophies, onAddTrophy, tokens, onEarnToken, on
             ))}
           </View>
         </ScrollView>
+      </View>
+    );
+  }
+
+  // ── Active grow — seed tray shown over active grow when CHANGE STRAIN tapped ──
+  if (showSeedTray) {
+    return (
+      <View style={{ flex: 1, backgroundColor: C.bg }}>
+        <StrainPickerModal
+          visible={pickerVisible}
+          onClose={() => setPickerVisible(false)}
+          onSelect={(strain) => { startGrow(strain); setShowSeedTray(false); }}
+        />
+        <SeedTray
+          trophies={trophies}
+          outdoorWeather={outdoorWeather}
+          growsCompleted={growsCompleted}
+          onSelectStrain={(strain) => { startGrow(strain); setShowSeedTray(false); }}
+          onBack={() => setShowSeedTray(false)}
+          onSearchAll={() => setPickerVisible(true)}
+        />
       </View>
     );
   }
@@ -763,13 +809,6 @@ export default function RTLGrow({ trophies, onAddTrophy, tokens, onEarnToken, on
         metal={metal}
         visible={harvestModalVisible}
         onPlantAgain={clearAndRestart}
-      />
-
-      {/* Strain picker for replanting */}
-      <StrainPickerModal
-        visible={pickerVisible}
-        onClose={() => setPickerVisible(false)}
-        onSelect={startGrow}
       />
 
       <ScrollView contentContainerStyle={{ paddingBottom: 48 }}>
@@ -1120,7 +1159,7 @@ export default function RTLGrow({ trophies, onAddTrophy, tokens, onEarnToken, on
 
             {/* Replace strain */}
             <TouchableOpacity
-              onPress={() => setPickerVisible(true)}
+              onPress={() => setShowSeedTray(true)}
               style={{
                 backgroundColor: C.surface,
                 borderRadius: 12, borderWidth: 1, borderColor: C.border,

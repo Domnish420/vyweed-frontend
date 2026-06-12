@@ -19,6 +19,25 @@ function buildSystemMessage(screen, screenCtx, outdoorCtx) {
   const ctxScreen = screenCtx?.screen;
 
   if (screen === "outdoor") {
+    // Seed tray mode — user is picking a seed for their next grow
+    if (ctxScreen === "seed_tray" && d?.seeds?.length > 0) {
+      const seedList = d.seeds.map((s, i) =>
+        `${i + 1}. ${s.name} (${s.type}, ${s.tier}, ${s.flowerWeeks}wk${s.isAutoflower ? ", autoflower" : ""}, THC ${s.thcMax}%, ${s.difficulty}, ${s.matchGrade})`
+      ).join("\n");
+      const weatherLine = d.temp !== undefined
+        ? `\nConditions: ${d.season} · ${d.temp}°C · ${d.weatherDesc || ""}`
+        : `\nSeason: ${d.season}`;
+      return (
+        base +
+        `The user is on the SEED TRAY — choosing which strain to start in their greenhouse.\n` +
+        `They have ${d.rerollsLeft} re-roll(s) remaining.\n\n` +
+        `Seeds on offer:\n${seedList}` +
+        weatherLine +
+        `\n\nHelp them pick the best seed. Reference strains by name. ` +
+        `If they ask for a recommendation, give one clearly and explain why it suits their current conditions.`
+      );
+    }
+
     // Greenhouse mode — plant context takes priority, weather appended if available
     if (ctxScreen === "greenhouse" && d?.strainName) {
       const weatherPart = outdoorCtx
@@ -416,18 +435,21 @@ export default function GrowverFAB({ screen, onOpenFull }) {
 
               {/* Context indicator — shows what Growver knows about this screen */}
               {(screen === "outdoor"
-                  ? (screenCtxRef.current?.screen === "greenhouse" || weatherCtx.current)
+                  ? (screenCtxRef.current?.screen === "greenhouse" || screenCtxRef.current?.screen === "seed_tray" || weatherCtx.current)
                   : screenCtxRef.current?.data) && (
                 <View style={{ backgroundColor: "#0a1a0a", borderBottomWidth: 1, borderColor: C.border, paddingHorizontal: 14, paddingVertical: 7, flexDirection: "row", alignItems: "center", gap: 6 }}>
                   <Text style={{ fontSize: 11 }}>
-                    {screen === "outdoor" && screenCtxRef.current?.screen === "greenhouse" ? "🏡"
+                    {screen === "outdoor" && screenCtxRef.current?.screen === "seed_tray" ? "🌱"
+                      : screen === "outdoor" && screenCtxRef.current?.screen === "greenhouse" ? "🏡"
                       : screen === "outdoor" ? "🌤"
                       : screen === "browse" ? "🌿"
                       : screen === "grow" ? "🎮"
                       : screen === "vpd" ? "💧" : "📋"}
                   </Text>
                   <Text style={{ color: C.greenDim, fontFamily: MONO, fontSize: 10 }}>
-                    {screen === "outdoor" && screenCtxRef.current?.screen === "greenhouse" && screenCtxRef.current?.data?.strainName
+                    {screen === "outdoor" && screenCtxRef.current?.screen === "seed_tray" && screenCtxRef.current?.data?.seeds?.length > 0
+                      ? `Seed tray · ${screenCtxRef.current.data.seeds.length} seeds · ${screenCtxRef.current.data.rerollsLeft} re-rolls left`
+                      : screen === "outdoor" && screenCtxRef.current?.screen === "greenhouse" && screenCtxRef.current?.data?.strainName
                       ? `Greenhouse: ${screenCtxRef.current.data.strainName} · Day ${screenCtxRef.current.data.day} · ${screenCtxRef.current.data.stage}`
                       : screen === "outdoor" && weatherCtx.current
                       ? `Weather-aware · ${weatherCtx.current.temp}°C · ${weatherCtx.current.city}`
