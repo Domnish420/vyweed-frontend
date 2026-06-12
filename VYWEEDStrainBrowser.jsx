@@ -20,8 +20,9 @@ import React, {
 } from "react";import {
   View, Text, ScrollView, FlatList, TouchableOpacity, TextInput,
   Modal, ActivityIndicator, Animated, Dimensions,
-  Platform, StatusBar, Alert,
+  Platform, StatusBar, Alert, StyleSheet, Easing,
 } from "react-native";
+import Svg, { Defs, RadialGradient, Stop, Rect } from "react-native-svg";
 import { cachedFetch, formatCacheAge } from "./cache";
 import OfflineBanner from "./OfflineBanner";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -127,6 +128,101 @@ function THCBar({ min, max }) {
       <Text style={{ color: col, fontFamily: MONO, fontSize: 11, fontWeight: "bold", width: 52 }}>
         {min}–{max}%
       </Text>
+    </View>
+  );
+}
+
+// ── Gradient "stage" — colour-driven hero where a 3D model/photo will live ─────
+let _gradSeq = 0;
+function useGradId() { return useMemo(() => `vw_grad_${_gradSeq++}`, []); }
+
+// Choose a centerpiece glyph from strain type/effect (placeholder for 3D model)
+function strainGlyph(strain) {
+  if (strain?.type === "indica") return "🪴";
+  if (strain?.type === "sativa") return "🌿";
+  return "🌱";
+}
+
+// Small gradient thumbnail used in list cards
+function StrainThumb({ colour, size = 60, glyph = "🌿" }) {
+  const id = useGradId();
+  const c = colour || C.green;
+  return (
+    <View style={{ width: size, height: size, borderRadius: 16, overflow: "hidden",
+      borderWidth: 1, borderColor: `${c}55` }}>
+      <Svg width={size} height={size} style={StyleSheet.absoluteFill}>
+        <Defs>
+          <RadialGradient id={id} cx="50%" cy="32%" r="80%">
+            <Stop offset="0" stopColor={c} stopOpacity="0.6" />
+            <Stop offset="0.6" stopColor={c} stopOpacity="0.18" />
+            <Stop offset="1" stopColor={c} stopOpacity="0.04" />
+          </RadialGradient>
+        </Defs>
+        <Rect width={size} height={size} fill={`url(#${id})`} />
+      </Svg>
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+        <Text style={{ fontSize: size * 0.46 }}>{glyph}</Text>
+      </View>
+    </View>
+  );
+}
+
+// Large hero stage for the detail screen — corner HUD brackets + floating glyph.
+// The centred glyph is a placeholder; a <GLView>/<Image> drops into this same frame later.
+function StrainStage({ colour, glyph = "🌿", height = 240 }) {
+  const id = useGradId();
+  const c = colour || C.green;
+  const float = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(float, { toValue: 1, duration: 2600, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(float, { toValue: 0, duration: 2600, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, []);
+
+  const translateY = float.interpolate({ inputRange: [0, 1], outputRange: [6, -6] });
+  const Bracket = ({ pos }) => {
+    const base = { position: "absolute", width: 26, height: 26, borderColor: `${c}aa` };
+    const map = {
+      tl: { top: 14, left: 14, borderTopWidth: 2, borderLeftWidth: 2, borderTopLeftRadius: 6 },
+      tr: { top: 14, right: 14, borderTopWidth: 2, borderRightWidth: 2, borderTopRightRadius: 6 },
+      bl: { bottom: 14, left: 14, borderBottomWidth: 2, borderLeftWidth: 2, borderBottomLeftRadius: 6 },
+      br: { bottom: 14, right: 14, borderBottomWidth: 2, borderRightWidth: 2, borderBottomRightRadius: 6 },
+    };
+    return <View style={[base, map[pos]]} />;
+  };
+
+  return (
+    <View style={{ height, borderRadius: 20, overflow: "hidden",
+      borderWidth: 1, borderColor: C.border, backgroundColor: "#0c110c" }}>
+      <Svg width="100%" height="100%" style={StyleSheet.absoluteFill}>
+        <Defs>
+          <RadialGradient id={id} cx="50%" cy="40%" r="75%">
+            <Stop offset="0" stopColor={c} stopOpacity="0.45" />
+            <Stop offset="0.55" stopColor={c} stopOpacity="0.12" />
+            <Stop offset="1" stopColor={c} stopOpacity="0" />
+          </RadialGradient>
+        </Defs>
+        <Rect width="100%" height="100%" fill={`url(#${id})`} />
+      </Svg>
+      <Bracket pos="tl" /><Bracket pos="tr" /><Bracket pos="bl" /><Bracket pos="br" />
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+        <Animated.Text style={{ fontSize: height * 0.42, transform: [{ translateY }] }}>
+          {glyph}
+        </Animated.Text>
+      </View>
+      <View style={{ position: "absolute", bottom: 12, alignSelf: "center",
+        flexDirection: "row", alignItems: "center", gap: 5 }}>
+        <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: c }} />
+        <Text style={{ color: `${c}cc`, fontFamily: HEADING, fontSize: 11, letterSpacing: 1.5 }}>
+          3D PREVIEW
+        </Text>
+      </View>
     </View>
   );
 }
@@ -805,93 +901,88 @@ function StrainCard({ strain, onPress, hasTrophy, compareMode, isInCompare }) {
   const typeCol  = TYPE_COLOUR[strain.type]  || C.amber;
   const diffCol  = DIFF_COLOUR[strain.difficulty] || C.amber;
   const effectCol = EFFECT_COLOUR[strain.effect] || C.amber;
+  const accent   = strain.colour || typeCol;
+  const flowerLabel = (() => {
+    const min = strain.flower_wk_min, max = strain.flower_wk_max;
+    if (min && max && min !== max) return `🌸 ${min}–${max}wk`;
+    if (max) return `🌸 ${max}wk`;
+    if (min) return `🌸 ${min}wk`;
+    return `🌸 ?wk`;
+  })();
 
   return (
-    <TouchableOpacity onPress={onPress} activeOpacity={0.8}>
+    <TouchableOpacity onPress={onPress} activeOpacity={0.85}>
       <View style={{
         backgroundColor: isInCompare ? `${C.purple}15` : C.card,
-        borderRadius: 14,
+        borderRadius: 18,
         borderWidth: 1,
         borderColor: isInCompare ? C.purple : C.border,
-        padding: 16, paddingRight: isInCompare ? 16 : 32, marginBottom: 12,
-        shadowColor: "#000", shadowOpacity: 0.25, shadowRadius: 8,
-        shadowOffset: { width: 0, height: 2 }, elevation: 3,
+        padding: 14, marginBottom: 14,
+        shadowColor: "#000", shadowOpacity: 0.3, shadowRadius: 10,
+        shadowOffset: { width: 0, height: 3 }, elevation: 4,
       }}>
-        {/* Chevron — tap indicator */}
-        {!compareMode && (
-          <View style={{ position: "absolute", right: 10, top: 0, bottom: 0, justifyContent: "center" }}>
-            <Text style={{ color: "rgba(255,255,255,0.2)", fontSize: 20 }}>›</Text>
-          </View>
-        )}
-        {/* Compare mode indicator */}
-        {compareMode && (
-          <View style={{ position: "absolute", top: 10, right: 10,
-            width: 22, height: 22, borderRadius: 11,
-            backgroundColor: isInCompare ? C.purple : C.surface,
-            borderWidth: 2, borderColor: isInCompare ? C.purple : C.border,
-            alignItems: "center", justifyContent: "center" }}>
-            {isInCompare && (
-              <Text style={{ color: C.white, fontSize: 12, fontWeight: "bold" }}>✓</Text>
-            )}
-          </View>
-        )}
-        {/* Row 1: name + tier + type */}
-        <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" }}>
-          <View style={{ flex: 1, marginRight: 8 }}>
+        {/* Top row: thumbnail · name/lineage/tags · action */}
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
+          <StrainThumb colour={accent} glyph={strainGlyph(strain)} size={64} />
+
+          <View style={{ flex: 1 }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-              <Text style={{ color: C.white, fontFamily: HEADING, fontSize: 20 }}>
+              <Text style={{ color: C.white, fontFamily: HEADING, fontSize: 21, flexShrink: 1 }}
+                numberOfLines={1}>
                 {strain.name}
               </Text>
-              {hasTrophy && (
-                <Text style={{ fontSize: 12 }}>🏆</Text>
-              )}
+              {hasTrophy && <Text style={{ fontSize: 12 }}>🏆</Text>}
             </View>
-            <Text style={{ color: C.greyLight, fontFamily: SANS, fontSize: 11, marginTop: 2 }}>
-              {strain.lineage?.slice(0, 48)}{strain.lineage?.length > 48 ? "…" : ""}
+            <Text style={{ color: C.greyLight, fontFamily: SANS, fontSize: 11, marginTop: 1 }}
+              numberOfLines={1}>
+              {strain.lineage || strain.origin || "—"}
             </Text>
-          </View>
-          <View style={{ alignItems: "flex-end", gap: 4 }}>
-            <View style={{ flexDirection: "row", gap: 4 }}>
+            <View style={{ flexDirection: "row", gap: 5, marginTop: 6 }}>
               <Tag label={strain.tier} colour={C.greyLight} />
               <Tag label={`${TYPE_ICON[strain.type]} ${strain.type}`} colour={typeCol} />
             </View>
           </View>
+
+          {/* Green action button (echoes the reference cards) / compare check */}
+          {compareMode ? (
+            <View style={{
+              width: 30, height: 30, borderRadius: 15,
+              backgroundColor: isInCompare ? C.purple : C.surface,
+              borderWidth: 2, borderColor: isInCompare ? C.purple : C.border,
+              alignItems: "center", justifyContent: "center",
+            }}>
+              {isInCompare && <Text style={{ color: C.white, fontSize: 13, fontFamily: SANS_BOLD }}>✓</Text>}
+            </View>
+          ) : (
+            <View style={{
+              width: 38, height: 38, borderRadius: 19,
+              backgroundColor: C.green,
+              alignItems: "center", justifyContent: "center",
+              shadowColor: C.greenBright, shadowOpacity: 0.5, shadowRadius: 6, elevation: 3,
+            }}>
+              <Text style={{ color: "#0a0f0a", fontSize: 18, fontFamily: SANS_BOLD, marginTop: -2 }}>›</Text>
+            </View>
+          )}
         </View>
 
-        {/* Row 2: THC bar */}
-        <View style={{ flexDirection: "row", alignItems: "center", marginTop: 10, gap: 6 }}>
+        {/* THC bar */}
+        <View style={{ flexDirection: "row", alignItems: "center", marginTop: 14, gap: 8 }}>
           <Label>THC</Label>
           <THCBar min={strain.thc_min} max={strain.thc_max} />
         </View>
 
-        {/* Row 3: meta tags */}
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
-          <Tag
-            label={`${EFFECT_ICON[strain.effect] || ""} ${strain.effect}`}
-            colour={effectCol}
-          />
-          <Tag
-            label={`${DIFF_ICON[strain.difficulty] || "●"} ${strain.difficulty}`}
-            colour={diffCol}
-          />
-          <Tag
-            label={(() => {
-              const min = strain.flower_wk_min;
-              const max = strain.flower_wk_max;
-              if (min && max && min !== max) return `🌸 ${min}–${max}wk`;
-              if (max) return `🌸 ${max}wk`;
-              if (min) return `🌸 ${min}wk`;
-              return `🌸 ?wk`;
-            })()}
-            colour={C.blue}
-          />
+        {/* Meta tags */}
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 10 }}>
+          <Tag label={`${EFFECT_ICON[strain.effect] || ""} ${strain.effect}`} colour={effectCol} />
+          <Tag label={`${DIFF_ICON[strain.difficulty] || "●"} ${strain.difficulty}`} colour={diffCol} />
+          <Tag label={flowerLabel} colour={C.blue} />
           <Tag label={`📦 ${strain.yield_max_gm2}g/m²`} colour={C.greyLight} />
         </View>
 
-        {/* Row 4: terpenes */}
+        {/* Terpenes */}
         {strain.terpenes?.length > 0 && (
-          <Text style={{ color: C.grey, fontFamily: MONO, fontSize: 10, marginTop: 6 }}>
-            🧪 {strain.terpenes.slice(0, 3).join(" · ")}
+          <Text style={{ color: C.greyLight, fontFamily: SANS, fontSize: 10, marginTop: 8 }}>
+            🧪 {strain.terpenes.slice(0, 3).join("  ·  ")}
           </Text>
         )}
       </View>
@@ -1336,46 +1427,90 @@ function StrainDetailScreen({ strainId, onBack, onStartGrow, onNavigateToStrain 
     </View>
   );
 
+  const accent = data.colour || typeCol;
+  const StatTile = ({ icon, label, value, colour }) => (
+    <View style={{ flex: 1, backgroundColor: C.card, borderRadius: 16,
+      borderWidth: 1, borderColor: C.border, paddingVertical: 14, alignItems: "center" }}>
+      <Text style={{ fontSize: 18 }}>{icon}</Text>
+      <Text style={{ color: colour || C.white, fontFamily: SANS_BOLD, fontSize: 15, marginTop: 6 }}>
+        {value}
+      </Text>
+      <Text style={{ color: C.greyLight, fontFamily: HEADING, fontSize: 12, letterSpacing: 1, marginTop: 2 }}>
+        {label}
+      </Text>
+    </View>
+  );
+
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
-      {/* Header */}
-      <View style={{
-        paddingHorizontal: 16,
-        paddingTop: Platform.OS === "android" ? (StatusBar.currentHeight || 24) + 8 : 52,
-        paddingBottom: 12,
-        borderBottomWidth: 1, borderColor: "rgba(255,255,255,0.06)",
-        backgroundColor: "rgba(13,18,13,0.96)",
-      }}>
-        <TouchableOpacity
-          onPress={onBack}
-          style={{
-            marginBottom: 10,
-            alignSelf: "flex-start",
-            width: 36, height: 36,
-            borderRadius: 18,
-            backgroundColor: "rgba(255,255,255,0.05)",
-            borderWidth: 1, borderColor: "rgba(255,255,255,0.1)",
-            alignItems: "center", justifyContent: "center",
-          }}
-        >
-          <Text style={{ color: C.green, fontFamily: MONO, fontSize: 18, lineHeight: 22 }}>‹</Text>
-        </TouchableOpacity>
-        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
-          <Text style={{ color: C.white, fontFamily: HEADING, fontSize: 28,
-            flex: 1, marginRight: 10, letterSpacing: 1 }}>
+      <ScrollView contentContainerStyle={{ paddingBottom: 50 }}>
+
+        {/* Hero stage with floating top bar */}
+        <View style={{ position: "relative",
+          paddingTop: Platform.OS === "android" ? (StatusBar.currentHeight || 24) + 12 : 52,
+          paddingHorizontal: 16 }}>
+          <StrainStage colour={accent} glyph={strainGlyph(data)} height={250} />
+          <View style={{ position: "absolute", left: 16, right: 16,
+            top: Platform.OS === "android" ? (StatusBar.currentHeight || 24) + 24 : 64,
+            flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+            <TouchableOpacity onPress={onBack} style={{
+              width: 38, height: 38, borderRadius: 19,
+              backgroundColor: "rgba(10,15,10,0.7)",
+              borderWidth: 1, borderColor: C.border,
+              alignItems: "center", justifyContent: "center" }}>
+              <Text style={{ color: C.greenBright, fontFamily: SANS, fontSize: 20, lineHeight: 24 }}>‹</Text>
+            </TouchableOpacity>
+            <InfoBtn onPress={() => setShowInfo(true)} />
+          </View>
+        </View>
+
+        {/* Floating name plate — overlaps the stage */}
+        <View style={{ marginHorizontal: 16, marginTop: -30,
+          backgroundColor: C.card, borderRadius: 20,
+          borderWidth: 1, borderColor: C.border, padding: 18,
+          shadowColor: "#000", shadowOpacity: 0.4, shadowRadius: 12,
+          shadowOffset: { width: 0, height: 4 }, elevation: 6 }}>
+          <Text style={{ color: C.white, fontFamily: HEADING, fontSize: 32, letterSpacing: 1 }}>
             {data.name}
           </Text>
-          <InfoBtn onPress={() => setShowInfo(true)} />
+          {!!data.lineage && (
+            <Text style={{ color: C.greyLight, fontFamily: SANS, fontSize: 12, marginTop: 2 }}>
+              {data.lineage}
+            </Text>
+          )}
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 12 }}>
+            <Tag label={data.tier} colour={C.greyLight} />
+            <Tag label={`${TYPE_ICON[data.type]} ${data.type}`} colour={typeCol} />
+            <Tag label={`${EFFECT_ICON[data.effect] || ""} ${data.effect}`} colour={effectCol} />
+            <Tag label={`${DIFF_ICON[data.difficulty] || "●"} ${data.difficulty}`} colour={diffCol} />
+          </View>
         </View>
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
-          <Tag label={data.tier} colour={C.greyLight} />
-          <Tag label={`${TYPE_ICON[data.type]} ${data.type}`} colour={typeCol} />
-          <Tag label={`${EFFECT_ICON[data.effect] || ""} ${data.effect}`} colour={effectCol} />
-          <Tag label={`${DIFF_ICON[data.difficulty] || "●"} ${data.difficulty}`} colour={diffCol} />
-        </View>
-      </View>
 
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 50 }}>
+        {/* 3 stat tiles — THC / FLOWER / YIELD */}
+        <View style={{ flexDirection: "row", gap: 10, marginHorizontal: 16, marginTop: 12 }}>
+          <StatTile icon="💊" label="THC"
+            value={`${data.thc_max}%`}
+            colour={data.thc_max >= 25 ? C.red : data.thc_max >= 20 ? C.amber : C.greenBright} />
+          <StatTile icon="🌸" label="FLOWER"
+            value={`${data.flower_wk_max}wk`} colour={C.blue} />
+          <StatTile icon="📦" label="YIELD"
+            value={`${data.yield_max_gm2}g`} colour={C.amber} />
+        </View>
+
+        {/* Start Grow CTA — prominent, like ADD TO MY GARDEN */}
+        {onStartGrow && (
+          <TouchableOpacity onPress={() => onStartGrow(data)} activeOpacity={0.85}
+            style={{ marginHorizontal: 16, marginTop: 14,
+              backgroundColor: C.green, borderRadius: 30,
+              paddingVertical: 15, alignItems: "center",
+              shadowColor: C.greenBright, shadowOpacity: 0.4, shadowRadius: 10, elevation: 4 }}>
+            <Text style={{ color: "#0a0f0a", fontFamily: HEADING, fontSize: 19, letterSpacing: 1.5 }}>
+              🌱 START GROW
+            </Text>
+          </TouchableOpacity>
+        )}
+
+        <View style={{ padding: 16 }}>
 
         {/* THC / CBD Hero */}
         <View style={{
@@ -1569,27 +1704,12 @@ function StrainDetailScreen({ strainId, onBack, onStartGrow, onNavigateToStrain 
           })() : null}
 
           <Label style={{ marginBottom: 4 }}>ORIGIN</Label>
-          <Text style={{ color: C.greyLight, fontFamily: MONO, fontSize: 12, lineHeight: 18 }}>
+          <Text style={{ color: C.greyLight, fontFamily: SANS, fontSize: 12, lineHeight: 18 }}>
             📍 {data.origin}
           </Text>
         </View>
 
-        {/* Start Grow CTA */}
-        {onStartGrow && (
-          <TouchableOpacity
-            onPress={() => onStartGrow(data)}
-            activeOpacity={0.8}
-            style={{
-              backgroundColor: C.greenFaint, borderRadius: 8,
-              borderWidth: 1, borderColor: C.green,
-              padding: 16, alignItems: "center", marginBottom: 8,
-            }}
-          >
-            <Text style={{ color: C.greenBright, fontFamily: HEADING, fontSize: 18, letterSpacing: 1 }}>
-              🌱 START GROW WITH THIS STRAIN
-            </Text>
-          </TouchableOpacity>
-        )}
+        </View>
       </ScrollView>
     </View>
   );
