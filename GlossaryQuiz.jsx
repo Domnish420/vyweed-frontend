@@ -81,18 +81,12 @@ function pickQuestions(count, seedStr) {
   return picked;
 }
 
-function buildOptions(question, rng) {
-  const correct = question.quiz.answer;
-  const distractors = (question.quiz.distractors || []).slice(0, 3);
-  while (distractors.length < 3) {
-    distractors.push("Unknown");
-  }
-  const opts = [correct, ...distractors];
-  for (let i = opts.length - 1; i > 0; i--) {
-    const j = Math.floor(rng() * (i + 1));
-    [opts[i], opts[j]] = [opts[j], opts[i]];
-  }
-  return opts;
+function buildOptions(question) {
+  return question.quiz.options || [];
+}
+
+function correctText(question) {
+  return question.quiz.options[question.quiz.answer];
 }
 
 function getGrade(score, total) {
@@ -191,7 +185,6 @@ export default function GlossaryQuiz({ mode, onClose, isPro }) {
 
   function startQuiz() {
     const qs = pickQuestions(questionCount, seedStr);
-    const rng = makeRng(seedFromStr(seedStr + "-opts"));
     const first = qs[0];
     setQuestions(qs);
     setCurrentIdx(0);
@@ -199,7 +192,7 @@ export default function GlossaryQuiz({ mode, onClose, isPro }) {
     setWrongAnswers([]);
     setSelectedOption(null);
     setAnswered(false);
-    setOptionsForQuestion(first ? buildOptions(first, rng) : []);
+    setOptionsForQuestion(first ? buildOptions(first) : []);
     recordAttemptStart();
     setPhase("playing");
   }
@@ -207,7 +200,7 @@ export default function GlossaryQuiz({ mode, onClose, isPro }) {
   function handleOptionPress(opt) {
     if (answered) return;
     const q = questions[currentIdx];
-    const correct = q.quiz.answer;
+    const correct = correctText(q);
     setSelectedOption(opt);
     setAnswered(true);
     if (opt === correct) {
@@ -215,7 +208,7 @@ export default function GlossaryQuiz({ mode, onClose, isPro }) {
     } else {
       setWrongAnswers((prev) => [
         ...prev,
-        { term: q.term, question: q.quiz.question, correct, chosen: opt },
+        { term: q.term, q: q.quiz.q, correct, chosen: opt },
       ]);
     }
   }
@@ -228,8 +221,7 @@ export default function GlossaryQuiz({ mode, onClose, isPro }) {
       setPhase("results");
       return;
     }
-    const rng = makeRng(seedFromStr(seedStr + "-opts-" + nextIdx));
-    setOptionsForQuestion(buildOptions(questions[nextIdx], rng));
+    setOptionsForQuestion(buildOptions(questions[nextIdx]));
     setCurrentIdx(nextIdx);
     setSelectedOption(null);
     setAnswered(false);
@@ -238,7 +230,7 @@ export default function GlossaryQuiz({ mode, onClose, isPro }) {
   function optionBg(opt) {
     if (!answered) return C.card;
     const q = questions[currentIdx];
-    const correct = q.quiz.answer;
+    const correct = correctText(q);
     if (opt === correct) return C.greenFaint;
     if (opt === selectedOption && opt !== correct) return "#3a0d0d";
     return C.card;
@@ -247,7 +239,7 @@ export default function GlossaryQuiz({ mode, onClose, isPro }) {
   function optionBorder(opt) {
     if (!answered) return C.border;
     const q = questions[currentIdx];
-    const correct = q.quiz.answer;
+    const correct = correctText(q);
     if (opt === correct) return C.green;
     if (opt === selectedOption && opt !== correct) return C.red;
     return C.border;
@@ -256,7 +248,7 @@ export default function GlossaryQuiz({ mode, onClose, isPro }) {
   function optionTextColor(opt) {
     if (!answered) return C.white;
     const q = questions[currentIdx];
-    const correct = q.quiz.answer;
+    const correct = correctText(q);
     if (opt === correct) return C.green;
     if (opt === selectedOption && opt !== correct) return C.red;
     return C.greyLight;
@@ -389,7 +381,7 @@ export default function GlossaryQuiz({ mode, onClose, isPro }) {
                   {questions[currentIdx].term.toUpperCase()}
                 </Text>
                 <Text style={{ fontFamily: MONO, fontSize: 15, color: C.white, lineHeight: 22 }}>
-                  {questions[currentIdx].quiz.question}
+                  {questions[currentIdx].quiz.q}
                 </Text>
               </View>
 
@@ -493,7 +485,7 @@ export default function GlossaryQuiz({ mode, onClose, isPro }) {
                         {w.term.toUpperCase()}
                       </Text>
                       <Text style={{ fontFamily: MONO, fontSize: 13, color: C.greyLight, lineHeight: 19, marginBottom: 10 }}>
-                        {w.question}
+                        {w.q}
                       </Text>
                       <View style={{ flexDirection: "row", marginBottom: 4 }}>
                         <Text style={{ fontFamily: MONO, fontSize: 11, color: C.greyLight, width: 80 }}>Your answer:</Text>
