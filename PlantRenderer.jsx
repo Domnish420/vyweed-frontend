@@ -30,10 +30,16 @@ const cbez = (a, b, c, d, t) => {
   return u*u*u*a + 3*u*u*t*b + 3*u*t*t*c + t*t*t*d;
 };
 
-// Lerp between two hex colours
+// Lerp between two colours — accepts both "#rrggbb" hex and "rgb(r,g,b)" strings
 function lerpColor(hex1, hex2, t) {
-  const p = h => [parseInt(h.slice(1,3),16), parseInt(h.slice(3,5),16), parseInt(h.slice(5,7),16)];
-  const [r1,g1,b1] = p(hex1), [r2,g2,b2] = p(hex2);
+  const parse = h => {
+    if (h && h.startsWith("rgb(")) {
+      const m = h.match(/\d+/g);
+      return m ? [+m[0], +m[1], +m[2]] : [0, 0, 0];
+    }
+    return [parseInt(h.slice(1,3),16), parseInt(h.slice(3,5),16), parseInt(h.slice(5,7),16)];
+  };
+  const [r1,g1,b1] = parse(hex1), [r2,g2,b2] = parse(hex2);
   const clamp = v => Math.max(0, Math.min(255, Math.round(v)));
   return `rgb(${clamp(r1+(r2-r1)*t)},${clamp(g1+(g2-g1)*t)},${clamp(b1+(b2-b1)*t)})`;
 }

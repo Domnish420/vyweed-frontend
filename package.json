@@ -18,7 +18,9 @@
     "react-native": "0.85.3",
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "4.25.2",
-    "react-native-svg": "15.15.4"
+    "react-native-svg": "15.15.4",
+    "expo-gl": "~14.0.2",
+    "three": "^0.168.0"
   },
   "devDependencies": {
     "babel-preset-expo": "~56.0.0"
