@@ -405,6 +405,37 @@ export default function SettingsScreen() {
           />
         </Section>
 
+        {/* Game data */}
+        <Section title="GAME DATA">
+          <SettingRow
+            label="TROPHIES &amp; TIMER"
+            sub="Wipe all collected trophies and clear the wait timer"
+            onPress={() => {
+              Alert.alert(
+                "Wipe Game Data",
+                "This will delete ALL your trophies and reset the wait timer. This cannot be undone.",
+                [
+                  { text: "Cancel", style: "cancel" },
+                  {
+                    text: "Wipe",
+                    style: "destructive",
+                    onPress: async () => {
+                      if (!AsyncStorage) return;
+                      await AsyncStorage.multiRemove([
+                        "vyweed_trophies",
+                        "vyweed_wait_timer",
+                      ]).catch(() => {});
+                      Alert.alert("Done", "Game data wiped. Start fresh!");
+                    },
+                  },
+                ]
+              );
+            }}
+            right={<Text style={{ color: C.red, fontFamily: MONO, fontSize: 14 }}>🗑</Text>}
+            last
+          />
+        </Section>
+
         {/* Database */}
         <Section title="DATABASE">
           <SettingRow

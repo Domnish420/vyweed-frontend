@@ -28,6 +28,11 @@ import { scheduleWaitTimerNotification } from "./notifications";
 const { width: SW } = Dimensions.get("window");
 import { API_V1 as API_BASE } from "./apiConfig";
 
+const TOTAL_STRAINS = 5042;
+const PAGE_SIZE     = 100;
+const TOTAL_PAGES   = Math.ceil(TOTAL_STRAINS / PAGE_SIZE);
+const randomPage    = () => Math.floor(Math.random() * TOTAL_PAGES) + 1;
+
 const HEADING   = "BebasNeue_400Regular";
 const SANS      = "SpaceGrotesk_400Regular";
 const SANS_MED  = "SpaceGrotesk_500Medium";
@@ -577,11 +582,18 @@ export default function VirtualGrow() {
     setDay(1);
     setStrain(getRandomStrain(pool));
     setAlreadyShelved(false);
+    // Background-refresh pool with a new random page for next pull
+    cachedFetch(`${API_BASE}/search?per_page=${PAGE_SIZE}&page=${randomPage()}&sort=name`)
+      .then(result => {
+        const strains = result.data?.results || [];
+        if (strains.length > 0) strainsPoolRef.current = strains;
+      })
+      .catch(() => {});
   };
 
-  // Load strain pool once on mount, then keep it in memory for instant re-rolls
+  // Load a random page of strains on mount — covers all 5,042 across ~51 pages
   useEffect(() => {
-    cachedFetch(`${API_BASE}/search?per_page=100&sort=name`)
+    cachedFetch(`${API_BASE}/search?per_page=${PAGE_SIZE}&page=${randomPage()}&sort=name`)
       .then(result => {
         const strains = result.data?.results || [];
         if (strains.length > 0) {
@@ -828,7 +840,7 @@ export default function VirtualGrow() {
         <TouchableOpacity
           onPress={() => {
             setLoading(true);
-            cachedFetch(`${API_BASE}/search?per_page=100&sort=name`)
+            cachedFetch(`${API_BASE}/search?per_page=${PAGE_SIZE}&page=${randomPage()}&sort=name`)
               .then(result => {
                 const strains = result.data?.results || [];
                 if (strains.length > 0) {
