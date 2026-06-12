@@ -25,6 +25,7 @@ import { cachedFetch } from "./cache";
 import { useAppMode } from "./AppMode";
 import { scheduleWaitTimerNotification } from "./notifications";
 import { setGrowverContext } from "./growverContext";
+import PlantRenderer from "./PlantRenderer";
 
 const { width: SW } = Dimensions.get("window");
 import { API_V1 as API_BASE } from "./apiConfig";
@@ -272,46 +273,9 @@ function TimerHero({ remaining, totalWait, onSkipAd, onSkipToken }) {
   );
 }
 
-// ── Plant visual (stage glyph + glow rings + HUD brackets) ───────────────────
-function PlantVisual({ day, totalDays, stage, strain, isHarvest, anim }) {
-  const pct = Math.min(1, day / totalDays);
-  const col = STAGE_COLOUR[stage] || C.green;
-  const glyph = STAGE_GLYPH[stage] || "🌱";
-  const plantSize = Math.min(120, 44 + pct * 82);
-  const glowSize  = plantSize * 2.8;
-
-  return (
-    <Animated.View style={{ alignItems: "center", justifyContent: "center", height: 240, opacity: anim }}>
-      {/* Outer glow ring */}
-      <View style={{
-        position: "absolute",
-        width: glowSize, height: glowSize, borderRadius: glowSize / 2,
-        backgroundColor: `${col}0d`,
-        borderWidth: 1, borderColor: `${col}22`,
-      }} />
-      {/* Inner glow */}
-      <View style={{
-        position: "absolute",
-        width: glowSize * 0.58, height: glowSize * 0.58, borderRadius: glowSize / 2,
-        backgroundColor: `${col}18`,
-      }} />
-      {/* HUD corners */}
-      {[
-        { top: 14,  left: SW * 0.18,  borderTopWidth: 1,    borderLeftWidth: 1 },
-        { top: 14,  right: SW * 0.18, borderTopWidth: 1,    borderRightWidth: 1 },
-        { bottom: 14, left: SW * 0.18,  borderBottomWidth: 1, borderLeftWidth: 1 },
-        { bottom: 14, right: SW * 0.18, borderBottomWidth: 1, borderRightWidth: 1 },
-      ].map((s, i) => (
-        <View key={i} style={{ position: "absolute", width: 18, height: 18, borderColor: `${col}50`, ...s }} />
-      ))}
-      {/* Plant emoji */}
-      <Text style={{ fontSize: plantSize, textAlign: "center" }}>{glyph}</Text>
-    </Animated.View>
-  );
-}
 
 // ── Shelve animation modal ────────────────────────────────────────────────────
-function ShelveModal({ strain, metal, visible, onComplete, onSkipAd }) {
+function ShelveModal({ strain, metal, visible, onComplete, onSkipAd, strainType }) {
   const scaleAnim = useRef(new Animated.Value(0)).current;
   const glowAnim  = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(60)).current;
@@ -342,8 +306,16 @@ function ShelveModal({ strain, metal, visible, onComplete, onSkipAd }) {
             backgroundColor: `${m.colour}08`,
             borderWidth: 1.5, borderColor: `${m.colour}44`,
             alignItems: "center", justifyContent: "center", marginBottom: -20,
+            overflow: "hidden",
           }}>
-            <Text style={{ fontSize: 60, marginBottom: 10 }}>🌿</Text>
+            <PlantRenderer
+              width={200}
+              height={200}
+              stage="Harvest Ready"
+              strainType={strainType || "H"}
+              tier={strain?.tier || "T4"}
+              strainSeed={strain?.id || 1}
+            />
             <Animated.View style={{
               position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
               borderRadius: 100, backgroundColor: `${m.colour}0c`, opacity: glowAnim,
@@ -411,7 +383,9 @@ function ShelveModal({ strain, metal, visible, onComplete, onSkipAd }) {
 // ── Trophy collection screen ──────────────────────────────────────────────────
 function TrophyCollection({ trophies, onBack }) {
   const total    = trophies.length;
-  const cellSize = Math.floor((SW - 40 - 8) / 2);  // 2-column, 1:1 cells
+  const cellSize = Math.floor((SW - 40 - 8) / 2);  // 2-column width
+  const cardH    = Math.round(cellSize * 1.45);      // taller to fit plant + label
+  const plantH   = Math.round(cellSize * 0.82);      // plant fills top portion
 
   const byMetal = {
     diamond: trophies.filter(t => t.metal === "diamond"),
@@ -495,24 +469,40 @@ function TrophyCollection({ trophies, onBack }) {
           columnWrapperStyle={{ gap: 8, marginBottom: 8 }}
           renderItem={({ item }) => {
             const m = METALS[item.metal] || METALS.bronze;
+            // strainType saved from v2 onwards; fall back to deterministic hash for old trophies
+            const sType = item.strainType || (item.strainId % 3 === 0 ? "I" : item.strainId % 3 === 1 ? "S" : "H");
             return (
               <View style={{
-                width: cellSize, height: cellSize,
+                width: cellSize, height: cardH,
                 backgroundColor: "rgba(255,255,255,0.02)",
                 borderRadius: 12, borderWidth: 1, borderColor: `${m.colour}30`,
-                alignItems: "center", justifyContent: "center",
+                overflow: "hidden",
               }}>
-                <Text style={{ fontSize: 36 }}>🌿</Text>
-                <Text style={{ fontSize: 14 }}>{m.icon}</Text>
-                <Text style={{
-                  color: m.colour, fontFamily: HEADING, fontSize: 13,
-                  marginTop: 6, textAlign: "center", letterSpacing: 0.5, paddingHorizontal: 6,
-                }} numberOfLines={2}>
-                  {item.strainName}
-                </Text>
-                <Text style={{ color: C.grey, fontFamily: SANS, fontSize: 8, marginTop: 3 }}>
-                  {item.tier} · {new Date(item.earnedAt).toLocaleDateString()}
-                </Text>
+                {/* Full-bloom plant */}
+                <PlantRenderer
+                  width={cellSize}
+                  height={plantH}
+                  stage="Harvest Ready"
+                  strainType={sType}
+                  tier={item.tier}
+                  strainSeed={item.strainId}
+                />
+                {/* Info strip */}
+                <View style={{
+                  flex: 1, alignItems: "center", justifyContent: "center",
+                  paddingHorizontal: 8, borderTopWidth: 1, borderColor: `${m.colour}20`,
+                }}>
+                  <Text style={{ fontSize: 12 }}>{m.icon}</Text>
+                  <Text style={{
+                    color: m.colour, fontFamily: HEADING, fontSize: 12,
+                    textAlign: "center", letterSpacing: 0.5, marginTop: 2,
+                  }} numberOfLines={2}>
+                    {item.strainName}
+                  </Text>
+                  <Text style={{ color: C.grey, fontFamily: SANS, fontSize: 8, marginTop: 2 }}>
+                    {item.tier} · {new Date(item.earnedAt).toLocaleDateString()}
+                  </Text>
+                </View>
               </View>
             );
           }}
@@ -676,6 +666,7 @@ export default function VirtualGrow({ trophies, onAddTrophy, tokens, onSpendToke
     const trophy = {
       strainId:   strain.id,
       strainName: strain.name,
+      strainType: strain.type,
       tier:       strain.tier,
       metal,
       date:       todayKey,
@@ -1021,13 +1012,14 @@ export default function VirtualGrow({ trophies, onAddTrophy, tokens, onSpendToke
         ) : (
           <View style={{ alignItems: "center", paddingVertical: 4 }} {...panResponder.panHandlers}>
             <Animated.View style={{ opacity: fadeAnim }}>
-              <PlantVisual
-                day={day}
-                totalDays={totalDays}
+              <PlantRenderer
+                width={260}
+                height={270}
                 stage={description?.stage || "Seedling"}
-                strain={strain}
-                isHarvest={isHarvest}
-                anim={fadeAnim}
+                strainType={strain.type}
+                tier={strain.tier}
+                strainSeed={strain.id}
+                day={day}
               />
             </Animated.View>
             <Text style={{ color: C.grey, fontFamily: SANS, fontSize: 10, marginTop: 2, letterSpacing: 1 }}>
@@ -1217,6 +1209,7 @@ export default function VirtualGrow({ trophies, onAddTrophy, tokens, onSpendToke
       <ShelveModal
         strain={strain}
         metal={metal}
+        strainType={strain?.type}
         visible={showShelve}
         onComplete={async () => {
           await saveTrophy();   // saves trophy + starts timer → timerActive=true

@@ -487,6 +487,7 @@ export default function GrowRoom({ trophies, onAddTrophy, tokens, onEarnToken, o
     await onAddTrophy({
       strainId:   growData.strainData.id,
       strainName: growData.strainData.name,
+      strainType: growData.strainData.type,
       tier:       growData.strainData.tier,
       metal:      m,
       date:       today,
@@ -530,6 +531,7 @@ export default function GrowRoom({ trophies, onAddTrophy, tokens, onEarnToken, o
       if (!strain) return;
       await onAddTrophy({
         strainId: strain.id, strainName: strain.name,
+        strainType: strain.type,
         tier: rolledTier, metal: rolledMetal,
         date: today, earnedAt: Date.now(),
         source: "growroom_weekly", weekNumber: nextUnclaimedWeek,

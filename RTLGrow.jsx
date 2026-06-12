@@ -565,6 +565,7 @@ export default function RTLGrow({ trophies, onAddTrophy, tokens, onEarnToken, on
     await onAddTrophy({
       strainId:   growData.strainData.id,
       strainName: growData.strainData.name,
+      strainType: growData.strainData.type,
       tier:       growData.strainData.tier,
       metal:      m,
       date:       new Date().toISOString().slice(0, 10),
@@ -613,6 +614,7 @@ export default function RTLGrow({ trophies, onAddTrophy, tokens, onEarnToken, on
       await onAddTrophy({
         strainId:   strain.id,
         strainName: strain.name,
+        strainType: strain.type,
         tier:       rolledTier,
         metal:      rolledMetal,
         date:       today,
