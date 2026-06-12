@@ -285,12 +285,18 @@ export default function GrowverFAB({ screen, onOpenFull }) {
       .slice(-MAX_HISTORY)
       .map(({ role, content }) => ({ role, content }));
 
+    // Backend only accepts role "user"|"assistant" — inject context as a primed
+    // exchange at the start so the model treats it as established context.
     const systemContent = buildSystemMessage(
       screen,
       screenCtxRef.current,
       weatherCtx.current,
     );
-    const history = [{ role: "system", content: systemContent }, ...baseHistory];
+    const contextPrime = [
+      { role: "user",      content: `[Context for this session — use this when answering]\n${systemContent}` },
+      { role: "assistant", content: "Understood. I have your context and will use it to give you specific, accurate answers." },
+    ];
+    const history = [...contextPrime, ...baseHistory];
 
     try {
       const r = await fetchWithTimeout(
@@ -301,7 +307,13 @@ export default function GrowverFAB({ screen, onOpenFull }) {
       );
       if (!r.ok) {
         const e = await r.json().catch(() => ({}));
-        throw new Error(e.detail || `Error ${r.status}`);
+        const detail = e.detail;
+        throw new Error(
+          typeof detail === "string" ? detail
+          : Array.isArray(detail)   ? detail.map(d => d.msg || JSON.stringify(d)).join("; ")
+          : detail                  ? JSON.stringify(detail)
+          :                           `Error ${r.status}`
+        );
       }
       const data = await r.json();
       addMsg("assistant", data.reply);
