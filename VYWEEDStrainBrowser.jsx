@@ -38,7 +38,8 @@ const CARD_W = (SW - 24 - GRID_GAP) / 2;   // list padding 12*2 + one gap
 // ── Config ────────────────────────────────────────────────────────────────────
 import { getApiV1, BACKEND_HEADERS } from "./apiConfig";
 import PlantRenderer from "./PlantRenderer";
-import PlantRenderer3D from "./PlantRenderer3D";
+let PlantRenderer3D = null;
+try { PlantRenderer3D = require("./PlantRenderer3D").default; } catch (_) {}
 const API_BASE = { toString: () => getApiV1() };
 // All `${API_BASE}` usages will now call getApiV1() at interpolation time.
 
@@ -199,14 +200,25 @@ function StrainStage({ colour, height = 240, strainId, strainType, strainTier })
       </Svg>
       <Bracket pos="tl" /><Bracket pos="tr" /><Bracket pos="bl" /><Bracket pos="br" />
       <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-        <PlantRenderer3D
-          width={SW - 32}
-          height={height - 16}
-          stage="Harvest Ready"
-          strainType={sType}
-          tier={sTier}
-          strainSeed={sId}
-        />
+        {PlantRenderer3D ? (
+          <PlantRenderer3D
+            width={SW - 32}
+            height={height - 16}
+            stage="Harvest Ready"
+            strainType={sType}
+            tier={sTier}
+            strainSeed={sId}
+          />
+        ) : (
+          <PlantRenderer
+            width={SW - 32}
+            height={height - 16}
+            stage="Harvest Ready"
+            strainType={sType}
+            tier={sTier}
+            strainSeed={sId}
+          />
+        )}
       </View>
       <View style={{ position: "absolute", bottom: 12, alignSelf: "center",
         flexDirection: "row", alignItems: "center", gap: 5 }}>
