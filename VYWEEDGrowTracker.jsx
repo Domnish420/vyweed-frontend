@@ -16,7 +16,7 @@ import {
   requestNotificationPermissions,
 } from "./notifications";
 
-const { width: SW } = Dimensions.get("window");
+const { width: SW, height: SH } = Dimensions.get("window");
 
 // ── Config ────────────────────────────────────────────────────────────────────
 import { getApiV1, BACKEND_HEADERS } from "./apiConfig";
@@ -520,7 +520,8 @@ const STAGE_GLOW = {
   Seedling: C.blue, Vegetative: C.greenBright,
   "Pre-Flower": C.amber, Flowering: "#c8733a", Harvest: "#d4a84b",
 };
-const HERO_H = 210;
+// Taller stage so the plant has room to "grow" as the grow ages (IRL + in-app)
+const HERO_H = Math.round(SH * 0.35);
 
 function GrowHero({ strainName, stage, day, medium, startDate, logCount,
                     criticalCount, onBack, onCheckin, onNutrients, onTimeline, onPhotos }) {
@@ -539,6 +540,8 @@ function GrowHero({ strainName, stage, day, medium, startDate, logCount,
 
   const glyph    = STAGE_GLYPH[stage] || "🌱";
   const glowCol  = STAGE_GLOW[stage]  || C.greenBright;
+  // Plant gets bigger as the grow ages — it grows alongside the real plant
+  const plantSize = Math.min(150, 88 + (day || 0) * 1.1);
 
   return (
     <View style={{ backgroundColor: C.bg }}>
@@ -548,7 +551,7 @@ function GrowHero({ strainName, stage, day, medium, startDate, logCount,
         {/* SVG radial glow */}
         <Svg style={StyleSheet.absoluteFill} width="100%" height={HERO_H}>
           <Defs>
-            <RadialGradient id="hg" cx="50%" cy="65%" rx="58%" ry="62%">
+            <RadialGradient id="hg" cx="50%" cy="56%" rx="60%" ry="60%">
               <Stop offset="0%"   stopColor={glowCol} stopOpacity="0.30" />
               <Stop offset="50%"  stopColor={glowCol} stopOpacity="0.07" />
               <Stop offset="100%" stopColor={C.bg}    stopOpacity="0"    />
@@ -601,10 +604,10 @@ function GrowHero({ strainName, stage, day, medium, startDate, logCount,
           </View>
         </View>
 
-        {/* Floating stage glyph */}
-        <View style={{ position: "absolute", left: 0, right: 0,
-          alignItems: "center", top: HERO_H * 0.18 }}>
-          <Animated.Text style={{ fontSize: 72, transform: [{ translateY: floatY }] }}>
+        {/* Floating stage glyph — vertically centred so it has room to grow */}
+        <View style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0,
+          alignItems: "center", justifyContent: "center" }} pointerEvents="none">
+          <Animated.Text style={{ fontSize: plantSize, transform: [{ translateY: floatY }] }}>
             {glyph}
           </Animated.Text>
         </View>
