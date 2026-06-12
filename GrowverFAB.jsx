@@ -188,15 +188,36 @@ export default function GrowverFAB({ screen, onOpenFull }) {
     addMsg("user", t);
     setLoading(true);
 
-    // On the first outdoor message inject live weather as invisible context
-    const ctx = screen === "outdoor" && messages.length === 0 ? weatherCtx.current : null;
-    const contextPrefix = ctx
-      ? `[Outdoor context: ${ctx.summary} Location: ${ctx.city}, ${ctx.country}.]\n\n`
-      : "";
-
-    const history = [...messages, { role: "user", content: contextPrefix + t }]
+    const baseHistory = [...messages, { role: "user", content: t }]
       .slice(-MAX_HISTORY)
       .map(({ role, content }) => ({ role, content }));
+
+    // Inject weather as a system message so the model reads it as trusted context,
+    // not as something to ask about. Injected on every outdoor request so the AI
+    // always has fresh conditions even across a long conversation.
+    const ctx = screen === "outdoor" ? weatherCtx.current : null;
+    const history = ctx ? [
+      {
+        role: "system",
+        content:
+          `You are Growver, an expert cannabis growing assistant. ` +
+          `The user is asking outdoor growing questions via the VYWEED app. ` +
+          `You have their REAL-TIME outdoor conditions — use them directly in your answers. ` +
+          `Do NOT ask the user for weather information; you already have it below.\n\n` +
+          `Location: ${ctx.city}, ${ctx.country} (${ctx.lat}° ${ctx.hemisphere === "Northern" ? "N" : "S"})\n` +
+          `Temperature: ${ctx.temp}°C (feels like ${ctx.feelsLike}°C)\n` +
+          `Humidity: ${ctx.humidity}%\n` +
+          `Wind: ${ctx.wind}km/h ${ctx.windDir}\n` +
+          `UV Index: ${ctx.uv ?? "N/A"}\n` +
+          `Conditions: ${ctx.weatherDesc}\n` +
+          `Daylight: ${ctx.daylightHours}h — ${ctx.daylightZone}\n` +
+          `Season: ${ctx.season}, ${ctx.hemisphere} hemisphere\n` +
+          `Planting status: ${ctx.plantingStatus}\n` +
+          `Active risks: ${ctx.risks}\n` +
+          `Data recorded: ${new Date(ctx.updatedAt).toLocaleTimeString()}`,
+      },
+      ...baseHistory,
+    ] : baseHistory;
 
     try {
       const r = await fetchWithTimeout(
