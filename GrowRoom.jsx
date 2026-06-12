@@ -14,6 +14,8 @@ import { setGrowverContext } from "./growverContext";
 import { API_V1 as API_BASE } from "./apiConfig";
 import SeedTray from "./SeedTray";
 import PlantRenderer from "./PlantRenderer";
+import DailyCarePanel from "./DailyCarePanel";
+import TrainingGrow from "./TrainingGrow";
 
 const { width: SW } = Dimensions.get("window");
 
@@ -415,6 +417,7 @@ export default function GrowRoom({ trophies, onAddTrophy, tokens, onEarnToken, o
   const [weekRewardMetal, setWeekRewardMetal]         = useState(null);
   const [weekRewardNum, setWeekRewardNum]             = useState(null);
   const [weekRewardLoading, setWeekRewardLoading]     = useState(false);
+  const [showTraining, setShowTraining]               = useState(false);
 
   useEffect(() => {
     AsyncStorage.getItem(GROW_STORAGE_KEY)
@@ -556,6 +559,11 @@ export default function GrowRoom({ trophies, onAddTrophy, tokens, onEarnToken, o
     await AsyncStorage.setItem(GROW_STORAGE_KEY, JSON.stringify(updated)).catch(() => {});
   };
 
+  // ── Training mode ──
+  if (showTraining) {
+    return <TrainingGrow mode="indoor" onComplete={() => setShowTraining(false)} />;
+  }
+
   // ── Loading ──
   if (loadingGrow) {
     return (
@@ -628,6 +636,25 @@ export default function GrowRoom({ trophies, onAddTrophy, tokens, onEarnToken, o
               Indoor-ready — any strain, any season
             </Text>
           </TouchableOpacity>
+
+          {/* Training CTA */}
+          {!alreadyHarvested && (
+            <TouchableOpacity
+              onPress={() => setShowTraining(true)}
+              style={{
+                marginTop: 12, width: "100%",
+                backgroundColor: C.purpleFaint,
+                borderRadius: 14, borderWidth: 1, borderColor: "rgba(200,180,232,0.18)",
+                paddingVertical: 14, alignItems: "center",
+              }}>
+              <Text style={{ color: C.purple, fontFamily: HEADING, fontSize: 18, letterSpacing: 1 }}>
+                🎓  TRAINING GROW
+              </Text>
+              <Text style={{ color: C.purpleDim, fontFamily: SANS, fontSize: 11, marginTop: 3 }}>
+                Learn the full indoor life cycle in 5–30 min
+              </Text>
+            </TouchableOpacity>
+          )}
 
           {/* Info chips */}
           <View style={{ flexDirection: "row", gap: 10, marginTop: 24, width: "100%" }}>
@@ -763,6 +790,8 @@ export default function GrowRoom({ trophies, onAddTrophy, tokens, onEarnToken, o
             strainType={growData.strainData.type}
             tier={growData.strainData.tier}
             strainSeed={growData.strainData.id}
+            day={currentDay}
+            totalDays={totalDays}
           />
           <Text style={{ color: C.grey, fontFamily: SANS, fontSize: 9, marginTop: 4, letterSpacing: 1.5 }}>
             {isHarvest ? "✂️ HARVEST READY" : "🏠 GROW ROOM · CONTROLLED"}

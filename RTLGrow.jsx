@@ -12,6 +12,8 @@ import { setGrowverContext } from "./growverContext";
 import { API_V1 as API_BASE } from "./apiConfig";
 import SeedTray from "./SeedTray";
 import PlantRenderer from "./PlantRenderer";
+import DailyCarePanel from "./DailyCarePanel";
+import TrainingGrow from "./TrainingGrow";
 
 const { width: SW } = Dimensions.get("window");
 
@@ -475,6 +477,7 @@ export default function RTLGrow({ trophies, onAddTrophy, tokens, onEarnToken, on
   const [weekRewardMetal, setWeekRewardMetal]       = useState(null);
   const [weekRewardNum, setWeekRewardNum]           = useState(null);
   const [weekRewardLoading, setWeekRewardLoading]   = useState(false);
+  const [showTraining, setShowTraining]             = useState(false);
 
   // Load persisted grow + outdoor weather on mount
   useEffect(() => {
@@ -655,6 +658,11 @@ export default function RTLGrow({ trophies, onAddTrophy, tokens, onEarnToken, on
     );
   }
 
+  // ── Training mode ──
+  if (showTraining) {
+    return <TrainingGrow mode="outdoor" onComplete={() => setShowTraining(false)} />;
+  }
+
   // ── No active grow / post-harvest ──
   if (!growData || (alreadyHarvested && !harvestModalVisible)) {
     // Seed tray — replaces strain picker as the primary start-grow flow
@@ -719,6 +727,25 @@ export default function RTLGrow({ trophies, onAddTrophy, tokens, onEarnToken, on
               Matched to your {outdoorWeather?.season || "local"} conditions
             </Text>
           </TouchableOpacity>
+
+          {/* Training CTA */}
+          {!alreadyHarvested && (
+            <TouchableOpacity
+              onPress={() => setShowTraining(true)}
+              style={{
+                marginTop: 16, width: "100%",
+                backgroundColor: "rgba(91,155,213,0.07)",
+                borderRadius: 14, borderWidth: 1, borderColor: "rgba(91,155,213,0.25)",
+                paddingVertical: 14, alignItems: "center",
+              }}>
+              <Text style={{ color: C.blue, fontFamily: HEADING, fontSize: 18, letterSpacing: 1 }}>
+                🎓  TRAINING GROW
+              </Text>
+              <Text style={{ color: "rgba(91,155,213,0.55)", fontFamily: SANS, fontSize: 11, marginTop: 3 }}>
+                Learn the full life cycle in 5–30 min
+              </Text>
+            </TouchableOpacity>
+          )}
 
           {/* Info chips */}
           <View style={{ flexDirection: "row", gap: 10, marginTop: 24, width: "100%" }}>
@@ -895,6 +922,8 @@ export default function RTLGrow({ trophies, onAddTrophy, tokens, onEarnToken, on
             strainType={growData.strainData.type}
             tier={growData.strainData.tier}
             strainSeed={growData.strainData.id}
+            day={currentDay}
+            totalDays={totalDays}
           />
           <Text style={{ color: C.grey, fontFamily: SANS, fontSize: 9, marginTop: 4, letterSpacing: 1.5 }}>
             {isHarvest ? "🌿 HARVEST READY" : "🏡 REAL-TIME GROW"}
@@ -927,34 +956,14 @@ export default function RTLGrow({ trophies, onAddTrophy, tokens, onEarnToken, on
           </TouchableOpacity>
         )}
 
-        {/* ── Daily care claim ─── */}
-        {canClaimDaily && (
-          <TouchableOpacity
-            onPress={claimDaily}
-            style={{
-              marginHorizontal: 16, marginBottom: 10,
-              backgroundColor: C.greenFaint,
-              borderRadius: 14, borderWidth: 1, borderColor: C.greenDim,
-              padding: 14, flexDirection: "row", alignItems: "center", gap: 12,
-            }}>
-            <Text style={{ fontSize: 24 }}>🌟</Text>
-            <View style={{ flex: 1 }}>
-              <Text style={{ color: C.green, fontFamily: HEADING, fontSize: 16, letterSpacing: 1 }}>
-                DAILY CARE
-              </Text>
-              <Text style={{ color: C.greenDim, fontFamily: SANS, fontSize: 11, marginTop: 1 }}>
-                You checked in today — claim your token
-              </Text>
-            </View>
-            <View style={{
-              backgroundColor: "rgba(61,255,160,0.15)",
-              borderRadius: 10, borderWidth: 1, borderColor: C.greenDim,
-              paddingHorizontal: 10, paddingVertical: 6,
-            }}>
-              <Text style={{ color: C.green, fontFamily: HEADING, fontSize: 16 }}>+1 🎟</Text>
-            </View>
-          </TouchableOpacity>
-        )}
+        {/* ── Daily care checklist ─── */}
+        <DailyCarePanel
+          stage={description?.stage || "Seedling"}
+          storageKey={RTL_STORAGE_KEY}
+          today={today}
+          canClaim={canClaimDaily}
+          onClaim={claimDaily}
+        />
 
         {/* ── Skip day button ─── */}
         {!isHarvest && !alreadyHarvested && tokens >= 3 && (

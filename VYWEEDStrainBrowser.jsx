@@ -37,6 +37,7 @@ const CARD_W = (SW - 24 - GRID_GAP) / 2;   // list padding 12*2 + one gap
 
 // ── Config ────────────────────────────────────────────────────────────────────
 import { getApiV1, BACKEND_HEADERS } from "./apiConfig";
+import PlantRenderer from "./PlantRenderer";
 const API_BASE = { toString: () => getApiV1() };
 // All `${API_BASE}` usages will now call getApiV1() at interpolation time.
 
@@ -146,25 +147,27 @@ function strainGlyph(strain) {
   return "🌱";
 }
 
-// Large hero stage for the detail screen — corner HUD brackets + floating glyph.
-// The centred glyph is a placeholder; a <GLView>/<Image> drops into this same frame later.
-function StrainStage({ colour, glyph = "🌿", height = 240 }) {
+// Large hero stage for the detail screen — procedural plant + corner HUD brackets.
+const TYPE_CODE = { indica: "I", sativa: "S", hybrid: "H", I: "I", S: "S", H: "H" };
+
+function StrainStage({ colour, height = 240, strainId, strainType, strainTier }) {
   const id = useGradId();
   const c = colour || C.green;
   const float = useRef(new Animated.Value(0)).current;
+  const { width: SW } = Dimensions.get("window");
 
   useEffect(() => {
     const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(float, { toValue: 1, duration: 2600, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-        Animated.timing(float, { toValue: 0, duration: 2600, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(float, { toValue: 1, duration: 3200, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(float, { toValue: 0, duration: 3200, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
       ])
     );
     loop.start();
     return () => loop.stop();
   }, []);
 
-  const translateY = float.interpolate({ inputRange: [0, 1], outputRange: [6, -6] });
+  const translateY = float.interpolate({ inputRange: [0, 1], outputRange: [5, -5] });
   const Bracket = ({ pos }) => {
     const base = { position: "absolute", width: 26, height: 26, borderColor: `${c}aa` };
     const map = {
@@ -176,14 +179,18 @@ function StrainStage({ colour, glyph = "🌿", height = 240 }) {
     return <View style={[base, map[pos]]} />;
   };
 
+  const sType = TYPE_CODE[strainType] || "H";
+  const sTier = strainTier || "T4";
+  const sId   = strainId   || 1;
+
   return (
     <View style={{ height, borderRadius: 20, overflow: "hidden",
       borderWidth: 1, borderColor: C.border, backgroundColor: "#0c110c" }}>
       <Svg width="100%" height="100%" style={StyleSheet.absoluteFill}>
         <Defs>
           <RadialGradient id={id} cx="50%" cy="40%" r="75%">
-            <Stop offset="0" stopColor={c} stopOpacity="0.45" />
-            <Stop offset="0.55" stopColor={c} stopOpacity="0.12" />
+            <Stop offset="0" stopColor={c} stopOpacity="0.35" />
+            <Stop offset="0.55" stopColor={c} stopOpacity="0.08" />
             <Stop offset="1" stopColor={c} stopOpacity="0" />
           </RadialGradient>
         </Defs>
@@ -191,9 +198,16 @@ function StrainStage({ colour, glyph = "🌿", height = 240 }) {
       </Svg>
       <Bracket pos="tl" /><Bracket pos="tr" /><Bracket pos="bl" /><Bracket pos="br" />
       <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-        <Animated.Text style={{ fontSize: height * 0.42, transform: [{ translateY }] }}>
-          {glyph}
-        </Animated.Text>
+        <Animated.View style={{ transform: [{ translateY }] }}>
+          <PlantRenderer
+            width={SW - 32}
+            height={height - 16}
+            stage="Harvest Ready"
+            strainType={sType}
+            tier={sTier}
+            strainSeed={sId}
+          />
+        </Animated.View>
       </View>
       <View style={{ position: "absolute", bottom: 12, alignSelf: "center",
         flexDirection: "row", alignItems: "center", gap: 5 }}>
@@ -1414,7 +1428,13 @@ function StrainDetailScreen({ strainId, onBack, onStartGrow, onNavigateToStrain 
         <View style={{ position: "relative",
           paddingTop: Platform.OS === "android" ? (StatusBar.currentHeight || 24) + 12 : 52,
           paddingHorizontal: 16 }}>
-          <StrainStage colour={accent} glyph={strainGlyph(data)} height={250} />
+          <StrainStage
+            colour={accent}
+            height={250}
+            strainId={data.id}
+            strainType={data.type}
+            strainTier={data.tier}
+          />
           <View style={{ position: "absolute", left: 16, right: 16,
             top: Platform.OS === "android" ? (StatusBar.currentHeight || 24) + 24 : 64,
             flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>

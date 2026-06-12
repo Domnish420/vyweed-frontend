@@ -1020,6 +1020,7 @@ export default function VirtualGrow({ trophies, onAddTrophy, tokens, onSpendToke
                 tier={strain.tier}
                 strainSeed={strain.id}
                 day={day}
+                totalDays={totalDays}
               />
             </Animated.View>
             <Text style={{ color: C.grey, fontFamily: SANS, fontSize: 10, marginTop: 2, letterSpacing: 1 }}>

@@ -99,6 +99,47 @@ const STRAIN_SHAPE = {
 // Tier controls trichome density
 const TIER_FROST = { T1: 1.00, T2: 0.78, T3: 0.56, T4: 0.36 };
 
+// ── Continuous-interpolation keyframes (maps 0→1 grow progress to visual params) ─
+// Boundaries: seedling=7d, veg=21d, transition=14d, flower phase proportional
+const STAGE_KEYFRAMES = [
+  { t: 0.00, ...STAGE_PRESET["Seedling"] },
+  { t: 0.10, ...STAGE_PRESET["Vegetative"] },
+  { t: 0.32, ...STAGE_PRESET["Transition"] },
+  { t: 0.46, ...STAGE_PRESET["Early Flower"] },
+  { t: 0.62, ...STAGE_PRESET["Mid Flower"] },
+  { t: 0.78, ...STAGE_PRESET["Late Flower"] },
+  { t: 0.95, ...STAGE_PRESET["Final Days"] },
+  { t: 1.00, ...STAGE_PRESET["Harvest Ready"] },
+];
+
+function growProgress(day, totalDays) {
+  const d  = Math.max(1, Math.min(day, totalDays));
+  const fl = Math.max(1, totalDays - 42);
+  if (d <= 7)  return (d / 7) * 0.10;
+  if (d <= 28) return 0.10 + ((d - 7)  / 21) * 0.22;
+  if (d <= 42) return 0.32 + ((d - 28) / 14) * 0.14;
+  return 0.46 + (Math.min((d - 42) / fl, 1)) * 0.54;
+}
+
+function lerpPreset(t) {
+  const kf = STAGE_KEYFRAMES;
+  for (let i = 0; i < kf.length - 1; i++) {
+    if (t >= kf[i].t && t <= kf[i + 1].t) {
+      const a  = kf[i + 1].t === kf[i].t ? 1 : (t - kf[i].t) / (kf[i + 1].t - kf[i].t);
+      const lp = k => kf[i][k] + a * (kf[i + 1][k] - kf[i][k]);
+      return { hPct: lp("hPct"), bud: lp("bud"), trich: lp("trich"), fade: lp("fade"), pist: lp("pist") };
+    }
+  }
+  return kf[kf.length - 1];
+}
+
+// Stage name → representative grow day (used when no day prop provided)
+const STAGE_DAY_EST = {
+  Seedling: 4, Vegetative: 18, Transition: 35,
+  "Early Flower": 52, "Mid Flower": 62, "Late Flower": 77,
+  "Final Days": 88, "Harvest Ready": 91,
+};
+
 // ── Main component ────────────────────────────────────────────────────────────
 export default function PlantRenderer({
   width      = 260,
@@ -107,12 +148,22 @@ export default function PlantRenderer({
   strainType = "H",
   tier       = "T4",
   strainSeed = 1,
+  day        = null,
+  totalDays  = null,
 }) {
   const geo = useMemo(() => {
     const rng   = makeRng(strainSeed | 0);           // structural identity RNG
-    const sp    = STAGE_PRESET[stage] || STAGE_PRESET["Vegetative"];
     const sh    = STRAIN_SHAPE[strainType] || STRAIN_SHAPE.H;
     const frost = TIER_FROST[tier] ?? 0.36;
+
+    // Continuous interpolation when day+totalDays provided; snap to stage preset otherwise
+    const sp = (day != null && totalDays != null && totalDays > 0)
+      ? lerpPreset(growProgress(day, totalDays))
+      : (STAGE_PRESET[stage] || STAGE_PRESET["Vegetative"]);
+
+    // Estimate current day for seedling detection
+    const dayEst        = day ?? (STAGE_DAY_EST[stage] ?? 50);
+    const isSeedling    = dayEst <= 7;
 
     // ── Canvas layout ──
     const cx     = width  / 2;
@@ -142,7 +193,6 @@ export default function PlantRenderer({
     const pistilCol = sp.bud > 0.55 ? "#c87828" : "#f0e8d0";
 
     // ── Node + branch geometry ──
-    const isSeedling = stage === "Seedling";
     const nodeCount  = isSeedling
       ? 0
       : Math.max(1, Math.floor(sh.nodes * Math.min(sp.hPct * 2.0, 1)));
@@ -266,7 +316,7 @@ export default function PlantRenderer({
       leafCol, leafDkCol, budCol, budHiCol, pistilCol,
       isSeedling, cotyPos,
     };
-  }, [stage, strainType, tier, strainSeed, width, height]);
+  }, [stage, strainType, tier, strainSeed, width, height, day, totalDays]);
 
   const {
     stemPath, stemCol,
