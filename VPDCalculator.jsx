@@ -4,7 +4,8 @@
  * Copy to your Expo project root
  */
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
+import { setGrowverContext } from "./growverContext";
 import {
   View, Text, ScrollView, TextInput, TouchableOpacity,
   Platform, StatusBar, Dimensions, Modal,
@@ -247,6 +248,20 @@ export default function VPDCalculator() {
   const vpd = useMemo(() => calcVPD(temp, rh), [temp, rh]);
   const { colour, label: statusLabel } = vpdStatus(vpd, stage);
   const target = STAGE_TARGETS[stage];
+
+  useEffect(() => {
+    const { label } = vpdStatus(vpd, stage);
+    const t = STAGE_TARGETS[stage];
+    setGrowverContext("vpd", {
+      temp, rh,
+      vpd:         Math.round(vpd * 100) / 100,
+      stage,
+      statusLabel: label,
+      targetLo:    t.lo,
+      targetHi:    t.hi,
+      targetIdeal: t.ideal,
+    });
+  }, [vpd, stage, temp, rh]);
 
   // Build a reference table: what RH gives ideal VPD at this temp?
   const refTable = useMemo(() => {

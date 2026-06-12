@@ -29,6 +29,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import StrainComparison from "./StrainComparison";
 import YieldCalculator from "./YieldCalculator";
 import { useAppMode } from "./AppMode";
+import { setGrowverContext } from "./growverContext";
 
 const { width: SW, height: SH } = Dimensions.get("window");
 const GRID_GAP = 12;
@@ -1347,6 +1348,24 @@ function StrainDetailScreen({ strainId, onBack, onStartGrow, onNavigateToStrain 
       .catch(e => Alert.alert("Error", e.message))
       .finally(() => setLoading(false));
   }, [strainId]);
+
+  useEffect(() => {
+    if (!data) return;
+    setGrowverContext("browse", {
+      strainName:    data.name,
+      type:          data.type,
+      tier:          data.tier,
+      difficulty:    data.difficulty,
+      thcMax:        data.thc_max,
+      cbdMax:        data.cbd_max,
+      flowerWeeks:   data.flower_wk_max,
+      aroma:         data.aroma,
+      effect:        data.effect,
+      isAutoflower:  data.is_autoflower,
+      yieldIndoorMax: data.yield_indoor_max,
+      heightMax:     data.height_max,
+    });
+  }, [data]);
 
   if (loading || !data) {
     return (

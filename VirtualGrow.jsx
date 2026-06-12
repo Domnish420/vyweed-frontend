@@ -24,6 +24,7 @@ import {
 import { cachedFetch } from "./cache";
 import { useAppMode } from "./AppMode";
 import { scheduleWaitTimerNotification } from "./notifications";
+import { setGrowverContext } from "./growverContext";
 
 const { width: SW } = Dimensions.get("window");
 import { API_V1 as API_BASE } from "./apiConfig";
@@ -635,6 +636,27 @@ export default function VirtualGrow() {
     [day, strain]
   );
   const metal = strain ? getMetal(strain.difficulty, strain.tier) : "bronze";
+
+  useEffect(() => {
+    if (!strain || !description) return;
+    setGrowverContext("grow", {
+      strainName:   strain.name,
+      strainType:   strain.type,
+      tier:         strain.tier,
+      difficulty:   strain.difficulty,
+      thcMax:       strain.thc_max,
+      aroma:        strain.aroma,
+      day,
+      totalDays,
+      stage:        description.stage,
+      stageDesc:    description.stageDesc,
+      visual:       description.visual,
+      tip:          description.tip,
+      isHarvest:    description.isHarvest,
+      trophyCount:  trophies.length,
+      timerActive,
+    });
+  }, [description, trophies.length, timerActive]);
 
   // Swipe handler
   const panResponder = useRef(PanResponder.create({

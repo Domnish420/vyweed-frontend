@@ -10,6 +10,95 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getApiBaseUrl } from "./apiConfig";
+
+// ── Build screen-aware system message ────────────────────────────────────────
+function buildSystemMessage(screen, screenCtx, outdoorCtx) {
+  const base = "You are Growver, an expert cannabis growing assistant built into the VYWEED app. ";
+
+  if (screen === "outdoor" && outdoorCtx) {
+    return (
+      base +
+      "The user is on the outdoor growing guide. You have their REAL-TIME conditions — " +
+      "use them directly and do NOT ask for weather information.\n\n" +
+      `Location: ${outdoorCtx.city}, ${outdoorCtx.country} (${outdoorCtx.lat}° ${outdoorCtx.hemisphere === "Northern" ? "N" : "S"})\n` +
+      `Temperature: ${outdoorCtx.temp}°C (feels ${outdoorCtx.feelsLike}°C)\n` +
+      `Humidity: ${outdoorCtx.humidity}%\n` +
+      `Wind: ${outdoorCtx.wind}km/h ${outdoorCtx.windDir}\n` +
+      `UV: ${outdoorCtx.uv ?? "N/A"} · Conditions: ${outdoorCtx.weatherDesc}\n` +
+      `Daylight: ${outdoorCtx.daylightHours}h — ${outdoorCtx.daylightZone}\n` +
+      `Season: ${outdoorCtx.season}, ${outdoorCtx.hemisphere} hemisphere\n` +
+      `Planting status: ${outdoorCtx.plantingStatus}\n` +
+      `Active risks: ${outdoorCtx.risks}`
+    );
+  }
+
+  const d = screenCtx?.data;
+
+  if (screen === "browse" && d?.strainName) {
+    const typeMap = { I: "Indica", S: "Sativa", H: "Hybrid" };
+    return (
+      base +
+      `The user is viewing the strain detail page for "${d.strainName}". ` +
+      "Answer questions specifically about THIS strain — never give a generic list.\n\n" +
+      `Strain: ${d.strainName}\n` +
+      `Type: ${typeMap[d.type] || d.type}\n` +
+      `Tier: ${d.tier} · Difficulty: ${d.difficulty}\n` +
+      `THC: up to ${d.thcMax}%` + (d.cbdMax ? ` · CBD: up to ${d.cbdMax}%` : "") + "\n" +
+      `Flower time: ${d.flowerWeeks} weeks\n` +
+      `Effect: ${d.effect} · Auto-flower: ${d.isAutoflower ? "Yes" : "No"}\n` +
+      `Aroma: ${d.aroma}\n` +
+      (d.yieldIndoorMax ? `Indoor yield: up to ${d.yieldIndoorMax}g/m²\n` : "") +
+      "\nWhen asked about difficulty or suitability, reference this strain's specific attributes above."
+    );
+  }
+
+  if (screen === "grow" && d?.strainName) {
+    return (
+      base +
+      `The user is in the virtual grow game, currently growing "${d.strainName}".\n\n` +
+      `Strain: ${d.strainName} (${d.tier}, ${d.difficulty}, up to ${d.thcMax}% THC)\n` +
+      `Aroma: ${d.aroma}\n` +
+      `Day: ${d.day} of ${d.totalDays} · Stage: ${d.stage}\n` +
+      `What's happening: ${d.stageDesc}\n` +
+      `Grower tip: ${d.tip}\n` +
+      (d.isHarvest ? "Status: HARVEST READY\n" : "") +
+      `Trophies collected: ${d.trophyCount}\n` +
+      "\nAnswer questions about this specific strain and stage. Reference day " + d.day + " / " + d.stage + " in your advice."
+    );
+  }
+
+  if (screen === "vpd" && d?.vpd !== undefined) {
+    return (
+      base +
+      "The user is using the VPD calculator. Here are their exact current readings — " +
+      "reference these specific numbers in your answer.\n\n" +
+      `Air temperature: ${d.temp}°C · Humidity: ${d.rh}%\n` +
+      `Calculated VPD: ${d.vpd} kPa\n` +
+      `Grow stage: ${d.stage}\n` +
+      `VPD status: ${d.statusLabel}\n` +
+      `Target range for ${d.stage}: ${d.targetLo}–${d.targetHi} kPa (ideal: ${d.targetIdeal} kPa)`
+    );
+  }
+
+  if (screen === "grows" && d?.strainName) {
+    let msg =
+      base +
+      "The user is tracking a real cannabis grow.\n\n" +
+      `Strain: ${d.strainName} · Stage: ${d.stage} · Day: ${d.currentDay}\n` +
+      `Medium: ${d.medium} · Days to harvest: ${d.daysToHarvest ?? "unknown"}\n`;
+    if (d.expertTip)    msg += `Today's tip: ${d.expertTip}\n`;
+    if (d.wateringGuide) msg += `Watering: ${d.wateringGuide}\n`;
+    if (d.nutrientGuide) msg += `Nutrients: ${d.nutrientGuide}\n`;
+    if (d.activeAlerts?.length)
+      msg += `\nActive alerts:\n${d.activeAlerts.map(a => `• ${a}`).join("\n")}\n`;
+    if (d.harvestTypical)
+      msg += `\nExpected harvest: ${d.harvestTypical} (${d.daysToHarvestTypical} days away)\n`;
+    msg += "\nAnswer questions about this specific grow. Reference stage, day count, and active alerts.";
+    return msg;
+  }
+
+  return base + "Answer cannabis growing questions with expertise and accuracy.";
+}
 const API_BASE_URL = { toString: () => getApiBaseUrl() };
 
 const { height: SH } = Dimensions.get("window");
@@ -133,7 +222,8 @@ export default function GrowverFAB({ screen, onOpenFull }) {
   const listRef      = useRef(null);
   const inputRef     = useRef(null);
   const hasOpened    = useRef(false);
-  const weatherCtx   = useRef(null); // live outdoor weather context for injection
+  const weatherCtx   = useRef(null); // outdoor weather (vyweed_outdoor_weather)
+  const screenCtxRef = useRef(null); // current screen context (vyweed_growver_context)
 
   // Entrance + glow when FAB mounts
   useEffect(() => {
@@ -154,7 +244,10 @@ export default function GrowverFAB({ screen, onOpenFull }) {
       Animated.spring(slideAnim, { toValue: 0, useNativeDriver: true, tension: 65, friction: 11 }),
       Animated.timing(fadeAnim,  { toValue: 1, duration: 220, useNativeDriver: true }),
     ]).start();
-    // Load outdoor weather context so every message from this screen is weather-aware
+    // Load screen context (all screens) and outdoor weather (outdoor only)
+    AsyncStorage.getItem("vyweed_growver_context")
+      .then(raw => { if (raw) screenCtxRef.current = JSON.parse(raw); })
+      .catch(() => {});
     if (screen === "outdoor") {
       AsyncStorage.getItem("vyweed_outdoor_weather")
         .then(raw => { if (raw) weatherCtx.current = JSON.parse(raw); })
@@ -192,32 +285,12 @@ export default function GrowverFAB({ screen, onOpenFull }) {
       .slice(-MAX_HISTORY)
       .map(({ role, content }) => ({ role, content }));
 
-    // Inject weather as a system message so the model reads it as trusted context,
-    // not as something to ask about. Injected on every outdoor request so the AI
-    // always has fresh conditions even across a long conversation.
-    const ctx = screen === "outdoor" ? weatherCtx.current : null;
-    const history = ctx ? [
-      {
-        role: "system",
-        content:
-          `You are Growver, an expert cannabis growing assistant. ` +
-          `The user is asking outdoor growing questions via the VYWEED app. ` +
-          `You have their REAL-TIME outdoor conditions — use them directly in your answers. ` +
-          `Do NOT ask the user for weather information; you already have it below.\n\n` +
-          `Location: ${ctx.city}, ${ctx.country} (${ctx.lat}° ${ctx.hemisphere === "Northern" ? "N" : "S"})\n` +
-          `Temperature: ${ctx.temp}°C (feels like ${ctx.feelsLike}°C)\n` +
-          `Humidity: ${ctx.humidity}%\n` +
-          `Wind: ${ctx.wind}km/h ${ctx.windDir}\n` +
-          `UV Index: ${ctx.uv ?? "N/A"}\n` +
-          `Conditions: ${ctx.weatherDesc}\n` +
-          `Daylight: ${ctx.daylightHours}h — ${ctx.daylightZone}\n` +
-          `Season: ${ctx.season}, ${ctx.hemisphere} hemisphere\n` +
-          `Planting status: ${ctx.plantingStatus}\n` +
-          `Active risks: ${ctx.risks}\n` +
-          `Data recorded: ${new Date(ctx.updatedAt).toLocaleTimeString()}`,
-      },
-      ...baseHistory,
-    ] : baseHistory;
+    const systemContent = buildSystemMessage(
+      screen,
+      screenCtxRef.current,
+      weatherCtx.current,
+    );
+    const history = [{ role: "system", content: systemContent }, ...baseHistory];
 
     try {
       const r = await fetchWithTimeout(
@@ -302,12 +375,24 @@ export default function GrowverFAB({ screen, onOpenFull }) {
                 </View>
               </View>
 
-              {/* Outdoor weather sync indicator */}
-              {screen === "outdoor" && weatherCtx.current && (
+              {/* Context indicator — shows what Growver knows about this screen */}
+              {(screen === "outdoor" ? weatherCtx.current : screenCtxRef.current?.data) && (
                 <View style={{ backgroundColor: "#0a1a0a", borderBottomWidth: 1, borderColor: C.border, paddingHorizontal: 14, paddingVertical: 7, flexDirection: "row", alignItems: "center", gap: 6 }}>
-                  <Text style={{ fontSize: 11 }}>🌤</Text>
+                  <Text style={{ fontSize: 11 }}>
+                    {screen === "outdoor" ? "🌤" : screen === "browse" ? "🌿" : screen === "grow" ? "🎮" : screen === "vpd" ? "💧" : "📋"}
+                  </Text>
                   <Text style={{ color: C.greenDim, fontFamily: MONO, fontSize: 10 }}>
-                    Weather-aware · {weatherCtx.current.temp}°C · {weatherCtx.current.city}
+                    {screen === "outdoor" && weatherCtx.current
+                      ? `Weather-aware · ${weatherCtx.current.temp}°C · ${weatherCtx.current.city}`
+                      : screen === "browse" && screenCtxRef.current?.data?.strainName
+                      ? `Viewing: ${screenCtxRef.current.data.strainName}`
+                      : screen === "grow" && screenCtxRef.current?.data?.strainName
+                      ? `Growing: ${screenCtxRef.current.data.strainName} · Day ${screenCtxRef.current.data.day} · ${screenCtxRef.current.data.stage}`
+                      : screen === "vpd" && screenCtxRef.current?.data?.vpd !== undefined
+                      ? `VPD: ${screenCtxRef.current.data.vpd} kPa · ${screenCtxRef.current.data.statusLabel}`
+                      : screen === "grows" && screenCtxRef.current?.data?.strainName
+                      ? `Tracking: ${screenCtxRef.current.data.strainName} · Day ${screenCtxRef.current.data.currentDay}`
+                      : "Screen context loaded"}
                   </Text>
                 </View>
               )}

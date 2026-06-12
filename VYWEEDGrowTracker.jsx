@@ -20,6 +20,7 @@ const { width: SW, height: SH } = Dimensions.get("window");
 
 // ── Config ────────────────────────────────────────────────────────────────────
 import { getApiV1, BACKEND_HEADERS } from "./apiConfig";
+import { setGrowverContext } from "./growverContext";
 const API_BASE = { toString: () => getApiV1() };
 
 // ── Palette ───────────────────────────────────────────────────────────────────
@@ -702,6 +703,29 @@ function GrowDetailScreen({ grow, onBack, onCheckin, onNutrients, onTimeline, on
   }, [grow.grow_id]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    if (!report) return;
+    const r       = report.report || {};
+    const summary = r.daily_summary || {};
+    const alerts  = r.environment_alerts || [];
+    const harvest = r.harvest_prediction || {};
+    setGrowverContext("grows", {
+      strainName:           grow.strain_name,
+      stage:                grow.stage,
+      currentDay:           grow.current_day,
+      medium:               grow.medium,
+      status:               grow.status,
+      daysToHarvest:        grow.days_to_harvest,
+      expertTip:            summary.expert_tip_of_the_day,
+      wateringGuide:        summary.watering_guidance,
+      nutrientGuide:        summary.nutrient_guidance,
+      whatHealthyLooksLike: summary.what_healthy_looks_like,
+      activeAlerts:         alerts.map(a => `[${a.severity.toUpperCase()}] ${a.message}`),
+      harvestTypical:       harvest.typical_harvest,
+      daysToHarvestTypical: harvest.days_remaining_typical,
+    });
+  }, [report]);
 
   if (loading || !report) {
     return (
