@@ -1,0 +1,815 @@
+// RTLGrow.jsx — Real-Time-Like greenhouse grow
+// 1 real day = 3 grow days (8 real hours per grow day)
+
+import React, { useState, useEffect, useRef, useMemo } from "react";
+import {
+  View, Text, TouchableOpacity, Modal, TextInput,
+  ScrollView, FlatList, ActivityIndicator, Dimensions,
+} from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { cachedFetch } from "./cache";
+import { setGrowverContext } from "./growverContext";
+import { API_V1 as API_BASE } from "./apiConfig";
+
+const { width: SW } = Dimensions.get("window");
+
+const MS_PER_GROW_DAY = (24 * 60 * 60 * 1000) / 3; // 8 real hours
+const RTL_STORAGE_KEY = "vyweed_rtl_grow";
+const TOTAL_PAGES = 51;
+
+const HEADING   = "BebasNeue_400Regular";
+const SANS      = "SpaceGrotesk_400Regular";
+const SANS_MED  = "SpaceGrotesk_500Medium";
+const SANS_BOLD = "SpaceGrotesk_700Bold";
+
+const C = {
+  bg:          "#0B0D0C",
+  surface:     "rgba(255,255,255,0.04)",
+  card:        "rgba(255,255,255,0.03)",
+  border:      "rgba(255,255,255,0.08)",
+  borderFaint: "rgba(255,255,255,0.05)",
+  green:       "#3dffa0",
+  greenFaint:  "rgba(61,255,160,0.08)",
+  greenDim:    "rgba(61,255,160,0.4)",
+  amber:       "#c17a4a",
+  red:         "#a05050",
+  blue:        "#5b9bd5",
+  grey:        "rgba(232,228,217,0.28)",
+  greyLight:   "rgba(232,228,217,0.52)",
+  white:       "#e8e4d9",
+  lavender:    "#c8b4e8",
+};
+
+const METALS = {
+  bronze:  { label: "Bronze",  rarity: "Common",    icon: "🥉", colour: "#cd7f32" },
+  silver:  { label: "Silver",  rarity: "Uncommon",  icon: "🥈", colour: "#b8c0cc" },
+  gold:    { label: "Gold",    rarity: "Rare",       icon: "🥇", colour: "#ffd700" },
+  diamond: { label: "Diamond", rarity: "Legendary",  icon: "💎", colour: "#7af6ff" },
+};
+
+const STAGE_GLYPH = {
+  "Seedling":     "🌱",
+  "Vegetative":   "🌿",
+  "Transition":   "🌸",
+  "Early Flower": "🌸",
+  "Mid Flower":   "💐",
+  "Late Flower":  "💐",
+  "Final Days":   "✂️",
+  "Harvest Ready":"✂️",
+};
+
+const STAGE_COLOUR = {
+  "Seedling":     "#5b9bd5",
+  "Vegetative":   "#3dffa0",
+  "Transition":   "#c17a4a",
+  "Early Flower": "#e0834a",
+  "Mid Flower":   "#e0834a",
+  "Late Flower":  "#c8b4e8",
+  "Final Days":   "#ffd700",
+  "Harvest Ready":"#ffd700",
+};
+
+function getMetal(difficulty, tier) {
+  if (tier === "T1") return "diamond";
+  if (difficulty === "advanced") return "gold";
+  if (difficulty === "intermediate") return "silver";
+  return "bronze";
+}
+
+function getDayDescription(day, strain) {
+  const fw = strain?.flower_wk_max || 9;
+  const totalDays = (fw + 4) * 7;
+
+  let stage, stageDay, stageDesc, visual, smell, tip;
+
+  if (day <= 7) {
+    stage = "Seedling";
+    stageDay = day;
+    stageDesc = "Two tiny seed leaves (cotyledons) have emerged. The plant is drawing on stored energy from the seed.";
+    visual = day <= 3
+      ? "A pale green sprout with two round seed leaves, barely 2cm tall. Stem is almost translucent."
+      : "First true serrated cannabis leaves appearing between the seed leaves. The plant is recognisably cannabis now.";
+    smell = "No aroma yet — just fresh green plant smell.";
+    tip = "Don't water yet — the seed has enough moisture. Leave it alone.";
+  } else if (day <= 28) {
+    stage = "Vegetative";
+    stageDay = day - 7;
+    const vDay = stageDay;
+    stageDesc = "The plant is building its structure — stems, branches, and fan leaves. All energy goes into growth.";
+    visual = vDay <= 7
+      ? `A bushy seedling ${8 + vDay * 2}cm tall with ${3 + vDay} sets of serrated leaves. Deep green, healthy looking.`
+      : vDay <= 14
+      ? `A proper plant now, ${22 + (vDay - 7) * 3}cm tall. Multiple branches visible. Fan leaves the size of your palm.`
+      : `${strain?.name} is establishing its full frame — ${45 + (vDay - 14) * 4}cm of lush green growth. Classic cannabis silhouette.`;
+    smell = vDay < 10
+      ? "Faint grassy green smell when you brush the leaves."
+      : "A distinct earthy, slightly sweet smell when leaves are touched. The terpenes are waking up.";
+    tip = vDay < 14
+      ? "Water when the top 2cm of soil is dry. Don't rush — let the soil breathe."
+      : "This is the time to train — LST (bending branches) now creates a wider canopy and more bud sites later.";
+  } else if (day <= 42) {
+    stage = "Transition";
+    stageDay = day - 28;
+    stageDesc = "Light has switched to 12/12. The plant knows autumn is coming. It's preparing to flower.";
+    visual = `The plant is STRETCHING — adding ${3 + (stageDay * 0.8 | 0)}cm every couple of days. White hairs (pistils) are beginning to appear at branch nodes. This is the 'pre-flower' — the first sign of femininity.`;
+    smell = "The aroma is intensifying. " + (strain?.aroma?.split(",")[0] || "Earthy tones") + " becoming more noticeable.";
+    tip = "The stretch can surprise new growers — some strains double in height during this phase. Make sure you have headroom.";
+  } else {
+    const flowerDay = day - 42;
+    const flowerTotal = fw * 7;
+    const flowerPct = flowerDay / flowerTotal;
+
+    if (flowerPct < 0.3) {
+      stage = "Early Flower";
+      stageDay = flowerDay;
+      stageDesc = "Bud sites are forming at every node. White hairs are multiplying. The plant's energy is shifting from growth to reproduction.";
+      visual = `Small bud clusters are forming all over the plant. The white pistils (hairs) are dense and bright. You can smell the distinct character of ${strain?.name} developing.`;
+      smell = `${strain?.aroma?.split(",").slice(0, 2).join(" and ") || "The characteristic aroma"} is now unmistakable when you enter the room.`;
+      tip = "Stop high-stress training now. The plant is committed to flowering. Keep defoliation minimal.";
+    } else if (flowerPct < 0.6) {
+      stage = "Mid Flower";
+      stageDay = flowerDay;
+      stageDesc = "Buds are swelling rapidly. This is the most dramatic visual phase — you can almost watch it happening in real time.";
+      visual = `Dense bud clusters are stacking on every branch. Trichomes are clearly visible — a frosty shimmer covers the buds and nearby leaves. The ${strain?.type === "S" ? "long sativa" : "compact indica"} buds are taking their characteristic shape.`;
+      smell = `The smell is now intense. ${strain?.aroma || "Rich, complex terpenes"} — you'd smell it from outside the room.`;
+      tip = "Peak feeding time. Keep EC in range, pH perfect. Any deficiency now directly reduces bud size.";
+    } else if (flowerPct < 0.92) {
+      stage = "Late Flower";
+      stageDay = flowerDay;
+      stageDesc = "Buds are hardening and fattening for the final push. Trichomes are clouding over — the plant is at peak THC production.";
+      visual = `The buds have a thick, crystalline coating. Under a loupe, trichomes appear cloudy white — peak potency. Fan leaves are starting to yellow as the plant redirects all nutrients into the flowers. The plant looks tired but the buds have never looked better.`;
+      smell = `Intense, room-filling ${strain?.aroma?.split(",")[0] || "complex"} aroma. The terpenes are at maximum expression right now.`;
+      tip = "Start checking trichomes daily with a loupe. When 70% are cloudy, the harvest window is opening.";
+    } else {
+      stage = flowerPct >= 0.98 ? "Harvest Ready" : "Final Days";
+      stageDay = flowerDay;
+      stageDesc = flowerPct >= 0.98
+        ? "The plant has completed its full life cycle. This is the moment."
+        : "The plant is completing its life cycle. Trichomes are transitioning from cloudy to amber. The harvest window is open.";
+      visual = flowerPct >= 0.98
+        ? `${strain?.name} at absolute peak. A perfect specimen. Buds coated in glistening trichomes, colours shifting to their final expression. This plant gave everything it had.`
+        : `A stunning mature ${strain?.name}. Buds are dense, frosted solid. Fan leaves are mostly yellow. Amber trichomes are appearing. The plant is ready.`;
+      smell = "The most intense aroma of the entire grow. This is what cannabis is supposed to smell like.";
+      tip = flowerPct >= 0.98
+        ? "Time to harvest. Press HARVEST NOW to add this plant to your collection."
+        : "Flush with plain water now. Check trichomes — harvest when you see the mix of cloudy and amber that suits your preference.";
+    }
+  }
+
+  return { stage, stageDay, stageDesc, visual, smell, tip, isHarvest: stage === "Harvest Ready" || day >= totalDays };
+}
+
+function calcGrowDay(startedAt, totalDays, now = Date.now()) {
+  const elapsed = now - startedAt;
+  return Math.min(totalDays, Math.max(1, Math.floor(elapsed / MS_PER_GROW_DAY) + 1));
+}
+
+function formatCountdown(ms) {
+  if (ms <= 0) return "soon";
+  const h = Math.floor(ms / 3_600_000);
+  const m = Math.floor((ms % 3_600_000) / 60_000);
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
+// ── Strain Picker Modal ───────────────────────────────────────────────────────
+function StrainPickerModal({ visible, onClose, onSelect }) {
+  const [query, setQuery]       = useState("");
+  const [results, setResults]   = useState([]);
+  const [searching, setSearching] = useState(false);
+  const debounceRef             = useRef(null);
+
+  useEffect(() => {
+    if (!visible) { setQuery(""); setResults([]); }
+  }, [visible]);
+
+  const search = (q) => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(async () => {
+      if (!q.trim()) { setResults([]); return; }
+      setSearching(true);
+      try {
+        const r = await cachedFetch(`${API_BASE}/search?q=${encodeURIComponent(q.trim())}&per_page=20&sort=name`);
+        setResults(r.data?.results || []);
+      } catch {
+        setResults([]);
+      } finally {
+        setSearching(false);
+      }
+    }, 400);
+  };
+
+  const pickRandom = async () => {
+    setSearching(true);
+    try {
+      const page = Math.floor(Math.random() * TOTAL_PAGES) + 1;
+      const r = await cachedFetch(`${API_BASE}/search?per_page=100&page=${page}&sort=name`);
+      const strains = r.data?.results || [];
+      if (strains.length > 0) {
+        onSelect(strains[Math.floor(Math.random() * strains.length)]);
+      }
+    } catch {} finally {
+      setSearching(false);
+    }
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.88)", justifyContent: "flex-end" }}>
+        <View style={{
+          backgroundColor: C.bg,
+          borderTopLeftRadius: 20, borderTopRightRadius: 20,
+          borderTopWidth: 2, borderLeftWidth: 1, borderRightWidth: 1,
+          borderColor: C.greenDim, maxHeight: "85%",
+        }}>
+          {/* Header */}
+          <View style={{
+            paddingHorizontal: 16, paddingVertical: 14,
+            borderBottomWidth: 1, borderColor: C.border,
+            flexDirection: "row", justifyContent: "space-between", alignItems: "center",
+          }}>
+            <View>
+              <Text style={{ color: C.green, fontFamily: HEADING, fontSize: 24, letterSpacing: 2 }}>
+                PICK A STRAIN
+              </Text>
+              <Text style={{ color: C.grey, fontFamily: SANS, fontSize: 10, marginTop: 2 }}>
+                Search 5,042 strains or go random
+              </Text>
+            </View>
+            <TouchableOpacity onPress={onClose} style={{
+              width: 30, height: 30, borderRadius: 15,
+              backgroundColor: C.surface, borderWidth: 1, borderColor: C.border,
+              alignItems: "center", justifyContent: "center",
+            }}>
+              <Text style={{ color: C.greyLight, fontSize: 14 }}>✕</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Random button */}
+          <TouchableOpacity
+            onPress={pickRandom}
+            disabled={searching}
+            style={{
+              margin: 14, marginBottom: 8,
+              backgroundColor: C.greenFaint,
+              borderRadius: 12, borderWidth: 1, borderColor: C.greenDim,
+              padding: 14, alignItems: "center",
+            }}>
+            <Text style={{ color: C.green, fontFamily: HEADING, fontSize: 20, letterSpacing: 1 }}>
+              🎲  RANDOM STRAIN
+            </Text>
+            <Text style={{ color: C.greenDim, fontFamily: SANS, fontSize: 10, marginTop: 2 }}>
+              Surprise me from all 5,042
+            </Text>
+          </TouchableOpacity>
+
+          {/* Divider */}
+          <View style={{ flexDirection: "row", alignItems: "center", marginHorizontal: 14, marginBottom: 8 }}>
+            <View style={{ flex: 1, height: 1, backgroundColor: C.border }} />
+            <Text style={{ color: C.grey, fontFamily: SANS, fontSize: 10, marginHorizontal: 10 }}>OR SEARCH</Text>
+            <View style={{ flex: 1, height: 1, backgroundColor: C.border }} />
+          </View>
+
+          {/* Search input */}
+          <TextInput
+            value={query}
+            onChangeText={q => { setQuery(q); search(q); }}
+            placeholder="Type a strain name..."
+            placeholderTextColor={C.grey}
+            style={{
+              marginHorizontal: 14, marginBottom: 8,
+              backgroundColor: C.surface,
+              borderRadius: 12, borderWidth: 1, borderColor: C.border,
+              color: C.white, fontFamily: SANS, fontSize: 14,
+              paddingHorizontal: 14, paddingVertical: 11,
+            }}
+          />
+
+          {/* Loading */}
+          {searching && <ActivityIndicator color={C.green} style={{ marginVertical: 12 }} />}
+
+          {/* Results */}
+          <FlatList
+            data={results}
+            keyExtractor={s => String(s.id)}
+            contentContainerStyle={{ paddingHorizontal: 14, paddingBottom: 24 }}
+            renderItem={({ item }) => {
+              const typeLabel = item.type === "I" ? "Indica" : item.type === "S" ? "Sativa" : "Hybrid";
+              const m = METALS[getMetal(item.difficulty, item.tier)];
+              return (
+                <TouchableOpacity
+                  onPress={() => onSelect(item)}
+                  style={{
+                    backgroundColor: C.card,
+                    borderRadius: 12, borderWidth: 1, borderColor: C.border,
+                    padding: 12, marginBottom: 8,
+                    flexDirection: "row", alignItems: "center", gap: 12,
+                  }}>
+                  <Text style={{ fontSize: 22 }}>{m.icon}</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: C.white, fontFamily: SANS_MED, fontSize: 14 }}>{item.name}</Text>
+                    <Text style={{ color: C.grey, fontFamily: SANS, fontSize: 11, marginTop: 3 }}>
+                      {item.tier} · {typeLabel} · {item.flower_wk_max}wk · THC {item.thc_max}%
+                    </Text>
+                  </View>
+                  <Text style={{ color: C.greenDim, fontFamily: HEADING, fontSize: 20 }}>›</Text>
+                </TouchableOpacity>
+              );
+            }}
+            ListEmptyComponent={
+              !searching && query.length > 0 ? (
+                <Text style={{ color: C.grey, fontFamily: SANS, fontSize: 13, textAlign: "center", marginTop: 20 }}>
+                  No results for "{query}"
+                </Text>
+              ) : null
+            }
+          />
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+// ── Harvest celebration modal ─────────────────────────────────────────────────
+function HarvestModal({ strain, metal, visible, onPlantAgain }) {
+  if (!strain || !visible) return null;
+  const m = METALS[metal] || METALS.bronze;
+
+  return (
+    <Modal visible={visible} transparent animationType="fade">
+      <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.94)", alignItems: "center", justifyContent: "center", padding: 32 }}>
+        <Text style={{ fontSize: 64, marginBottom: 8 }}>🏆</Text>
+        <Text style={{ color: m.colour, fontFamily: HEADING, fontSize: 40, letterSpacing: 4, textAlign: "center" }}>
+          HARVESTED
+        </Text>
+        <Text style={{ color: C.white, fontFamily: HEADING, fontSize: 26, marginTop: 12, textAlign: "center", letterSpacing: 1 }}>
+          {strain.name}
+        </Text>
+        <Text style={{ color: m.colour, fontFamily: SANS, fontSize: 13, marginTop: 6 }}>
+          {m.icon} {m.rarity} Trophy Earned
+        </Text>
+        <Text style={{ color: C.greyLight, fontFamily: SANS, fontSize: 13, marginTop: 16, textAlign: "center", lineHeight: 20 }}>
+          Your real-time grow is complete.{"\n"}Trophy added to your collection.
+        </Text>
+
+        <TouchableOpacity
+          onPress={onPlantAgain}
+          style={{
+            marginTop: 32, width: "100%",
+            backgroundColor: C.greenFaint,
+            borderRadius: 14, borderWidth: 1, borderColor: C.greenDim,
+            paddingVertical: 18, alignItems: "center",
+          }}>
+          <Text style={{ color: C.green, fontFamily: HEADING, fontSize: 24, letterSpacing: 2 }}>
+            PLANT AGAIN →
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </Modal>
+  );
+}
+
+// ── Main RTLGrow component ────────────────────────────────────────────────────
+export default function RTLGrow({ trophies, onAddTrophy }) {
+  const [growData, setGrowData]       = useState(null);
+  const [loadingGrow, setLoadingGrow] = useState(true);
+  const [now, setNow]                 = useState(Date.now());
+  const [pickerVisible, setPickerVisible]   = useState(false);
+  const [harvestModalVisible, setHarvestModalVisible] = useState(false);
+
+  // Load persisted grow on mount
+  useEffect(() => {
+    AsyncStorage.getItem(RTL_STORAGE_KEY)
+      .then(raw => { if (raw) setGrowData(JSON.parse(raw)); })
+      .catch(() => {})
+      .finally(() => setLoadingGrow(false));
+  }, []);
+
+  // Tick every 60 seconds to update current day + countdown
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Derived values
+  const totalDays  = growData?.totalDays ?? 91;
+  const currentDay = growData ? calcGrowDay(growData.startedAt, totalDays, now) : 1;
+  const description = useMemo(() =>
+    growData ? getDayDescription(currentDay, growData.strainData) : null,
+    [currentDay, growData]
+  );
+  const metal          = growData ? getMetal(growData.strainData.difficulty, growData.strainData.tier) : "bronze";
+  const isHarvest      = description?.isHarvest || currentDay >= totalDays;
+  const alreadyHarvested = Boolean(growData?.harvestedAt);
+  const msIntoDay      = growData ? (now - growData.startedAt) % MS_PER_GROW_DAY : 0;
+  const msToNextDay    = MS_PER_GROW_DAY - msIntoDay;
+
+  // Sync Growver context whenever day/stage changes
+  useEffect(() => {
+    if (!growData || !description) return;
+    setGrowverContext("greenhouse", {
+      strainName:  growData.strainData.name,
+      strainType:  growData.strainData.type,
+      tier:        growData.strainData.tier,
+      difficulty:  growData.strainData.difficulty,
+      thcMax:      growData.strainData.thc_max,
+      aroma:       growData.strainData.aroma,
+      day:         currentDay,
+      totalDays,
+      stage:       description.stage,
+      stageDesc:   description.stageDesc,
+      tip:         description.tip,
+      isHarvest,
+      rtlMode:     true,
+      nextDayIn:   isHarvest ? "harvest ready" : formatCountdown(msToNextDay),
+    });
+  }, [description, currentDay, isHarvest]);
+
+  const startGrow = async (strain) => {
+    const fw = strain.flower_wk_max || 9;
+    const td = (fw + 4) * 7;
+    const data = {
+      strainData:  strain,
+      startedAt:   Date.now(),
+      totalDays:   td,
+      harvestedAt: null,
+    };
+    setGrowData(data);
+    await AsyncStorage.setItem(RTL_STORAGE_KEY, JSON.stringify(data)).catch(() => {});
+    setPickerVisible(false);
+  };
+
+  const harvest = async () => {
+    if (!growData || alreadyHarvested) return;
+    const m = getMetal(growData.strainData.difficulty, growData.strainData.tier);
+    await onAddTrophy({
+      strainId:   growData.strainData.id,
+      strainName: growData.strainData.name,
+      tier:       growData.strainData.tier,
+      metal:      m,
+      date:       new Date().toISOString().slice(0, 10),
+      earnedAt:   Date.now(),
+      source:     "greenhouse",
+    });
+    const updated = { ...growData, harvestedAt: Date.now() };
+    setGrowData(updated);
+    await AsyncStorage.setItem(RTL_STORAGE_KEY, JSON.stringify(updated)).catch(() => {});
+    setHarvestModalVisible(true);
+  };
+
+  const clearAndRestart = async () => {
+    setHarvestModalVisible(false);
+    setGrowData(null);
+    await AsyncStorage.removeItem(RTL_STORAGE_KEY).catch(() => {});
+    setPickerVisible(true); // open picker immediately
+  };
+
+  // ── Loading ──
+  if (loadingGrow) {
+    return (
+      <View style={{ flex: 1, backgroundColor: C.bg, alignItems: "center", justifyContent: "center" }}>
+        <ActivityIndicator color={C.green} size="large" />
+      </View>
+    );
+  }
+
+  // ── No active grow / post-harvest ──
+  if (!growData || (alreadyHarvested && !harvestModalVisible)) {
+    return (
+      <View style={{ flex: 1, backgroundColor: C.bg }}>
+        <StrainPickerModal
+          visible={pickerVisible}
+          onClose={() => setPickerVisible(false)}
+          onSelect={startGrow}
+        />
+        <ScrollView contentContainerStyle={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 32 }}>
+          <Text style={{ fontSize: 60, marginBottom: 12 }}>🏡</Text>
+
+          {alreadyHarvested ? (
+            <>
+              <Text style={{ color: C.green, fontFamily: HEADING, fontSize: 30, letterSpacing: 2, textAlign: "center" }}>
+                HARVEST COMPLETE
+              </Text>
+              <Text style={{ color: C.greyLight, fontFamily: SANS, fontSize: 13, marginTop: 10, textAlign: "center", lineHeight: 20 }}>
+                {growData?.strainData?.name} has been added to your collection.{"\n"}Ready to start your next grow?
+              </Text>
+            </>
+          ) : (
+            <>
+              <Text style={{ color: C.white, fontFamily: HEADING, fontSize: 30, letterSpacing: 2, textAlign: "center" }}>
+                GREENHOUSE
+              </Text>
+              <Text style={{ color: C.greyLight, fontFamily: SANS, fontSize: 13, marginTop: 10, textAlign: "center", lineHeight: 20 }}>
+                Grow any strain from our database in real time.{"\n"}Growver monitors your plant every step of the way.
+              </Text>
+            </>
+          )}
+
+          <TouchableOpacity
+            onPress={() => setPickerVisible(true)}
+            style={{
+              marginTop: 28, width: "100%",
+              backgroundColor: C.greenFaint,
+              borderRadius: 14, borderWidth: 1, borderColor: C.greenDim,
+              paddingVertical: 18, alignItems: "center",
+            }}>
+            <Text style={{ color: C.green, fontFamily: HEADING, fontSize: 22, letterSpacing: 2 }}>
+              {alreadyHarvested ? "PLANT AGAIN →" : "START A GROW →"}
+            </Text>
+          </TouchableOpacity>
+
+          {/* Info chips */}
+          <View style={{ flexDirection: "row", gap: 10, marginTop: 24, width: "100%" }}>
+            {[
+              { label: "1 REAL DAY", sub: "= 3 GROW DAYS" },
+              { label: "~30 DAYS", sub: "PER 9-WEEK STRAIN" },
+            ].map(({ label, sub }) => (
+              <View key={label} style={{
+                flex: 1, backgroundColor: C.card,
+                borderRadius: 12, borderWidth: 1, borderColor: C.border,
+                padding: 14, alignItems: "center",
+              }}>
+                <Text style={{ color: C.green, fontFamily: HEADING, fontSize: 16, letterSpacing: 0.5 }}>{label}</Text>
+                <Text style={{ color: C.grey, fontFamily: SANS, fontSize: 9, marginTop: 3 }}>{sub}</Text>
+              </View>
+            ))}
+          </View>
+
+          {/* How it works */}
+          <View style={{
+            marginTop: 16, width: "100%",
+            backgroundColor: C.card, borderRadius: 14,
+            borderWidth: 1, borderColor: C.border, padding: 16,
+          }}>
+            <Text style={{ color: C.greyLight, fontFamily: SANS_MED, fontSize: 10, letterSpacing: 2, marginBottom: 10 }}>
+              HOW IT WORKS
+            </Text>
+            {[
+              "Pick any strain from 5,042 in our database",
+              "Your plant advances 3 grow days for every real day",
+              "Growver reads your plant's current stage and gives live advice",
+              "Harvest when ready — earn a trophy for your collection",
+            ].map((step, i) => (
+              <View key={i} style={{ flexDirection: "row", gap: 10, marginBottom: 8 }}>
+                <Text style={{ color: C.greenDim, fontFamily: HEADING, fontSize: 14, lineHeight: 20 }}>
+                  {i + 1}.
+                </Text>
+                <Text style={{ color: C.greyLight, fontFamily: SANS, fontSize: 12, lineHeight: 18, flex: 1 }}>
+                  {step}
+                </Text>
+              </View>
+            ))}
+          </View>
+        </ScrollView>
+      </View>
+    );
+  }
+
+  // ── Active grow ──
+  const m          = METALS[metal];
+  const stageCol   = STAGE_COLOUR[description?.stage] || C.green;
+  const glyph      = STAGE_GLYPH[description?.stage] || "🌱";
+  const progressPct = (currentDay / totalDays) * 100;
+  const typeLabel   = growData.strainData.type === "I" ? "INDICA"
+                    : growData.strainData.type === "S" ? "SATIVA" : "HYBRID";
+
+  return (
+    <View style={{ flex: 1, backgroundColor: C.bg }}>
+      {/* Harvest celebration modal */}
+      <HarvestModal
+        strain={growData?.strainData}
+        metal={metal}
+        visible={harvestModalVisible}
+        onPlantAgain={clearAndRestart}
+      />
+
+      {/* Strain picker for replanting */}
+      <StrainPickerModal
+        visible={pickerVisible}
+        onClose={() => setPickerVisible(false)}
+        onSelect={startGrow}
+      />
+
+      <ScrollView contentContainerStyle={{ paddingBottom: 48 }}>
+
+        {/* ── Strain nameplate ─── */}
+        <View style={{
+          paddingHorizontal: 16, paddingTop: 14, paddingBottom: 12,
+          borderBottomWidth: 1, borderColor: C.border,
+        }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <Text style={{ fontSize: 14 }}>{m.icon}</Text>
+            <Text style={{ color: m.colour, fontFamily: HEADING, fontSize: 26, flex: 1, letterSpacing: 1 }}>
+              {growData.strainData.name}
+            </Text>
+            <View style={{
+              backgroundColor: `${m.colour}18`,
+              borderRadius: 20, borderWidth: 1, borderColor: `${m.colour}60`,
+              paddingHorizontal: 10, paddingVertical: 4,
+            }}>
+              <Text style={{ color: m.colour, fontFamily: SANS_BOLD, fontSize: 9, letterSpacing: 1.5 }}>
+                GREENHOUSE
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* ── Progress bar + day label ─── */}
+        <View style={{ paddingHorizontal: 16, paddingTop: 14, paddingBottom: 8 }}>
+          <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 8, alignItems: "center" }}>
+            <Text style={{ color: C.grey, fontFamily: SANS, fontSize: 10 }}>DAY 1</Text>
+            <Text style={{
+              color: isHarvest ? "#ffd700" : C.green,
+              fontFamily: HEADING, fontSize: 18, letterSpacing: 1,
+              textShadowColor: isHarvest ? "#ffd70060" : `${C.green}60`,
+              textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 8,
+            }}>
+              DAY {currentDay} — {description?.stage?.toUpperCase()}
+            </Text>
+            <Text style={{ color: C.grey, fontFamily: SANS, fontSize: 10 }}>DAY {totalDays}</Text>
+          </View>
+          <View style={{ height: 3, backgroundColor: C.border, borderRadius: 2, overflow: "hidden" }}>
+            <View style={{
+              width: `${progressPct}%`, height: 3,
+              backgroundColor: isHarvest ? "#ffd700" : C.green,
+              borderRadius: 2,
+            }} />
+          </View>
+          <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 6 }}>
+            <Text style={{ color: C.grey, fontFamily: SANS, fontSize: 9 }}>
+              {((progressPct)).toFixed(0)}% COMPLETE
+            </Text>
+            {!isHarvest && (
+              <Text style={{ color: C.grey, fontFamily: SANS, fontSize: 9 }}>
+                Next grow day in {formatCountdown(msToNextDay)}
+              </Text>
+            )}
+            {isHarvest && (
+              <Text style={{ color: "#ffd700", fontFamily: SANS_MED, fontSize: 9 }}>
+                HARVEST READY ✦
+              </Text>
+            )}
+          </View>
+        </View>
+
+        {/* ── Plant visual ─── */}
+        <View style={{ alignItems: "center", paddingVertical: 20 }}>
+          <View style={{
+            width: 160, height: 160, borderRadius: 80,
+            backgroundColor: `${stageCol}0d`,
+            borderWidth: 1, borderColor: `${stageCol}22`,
+            alignItems: "center", justifyContent: "center",
+          }}>
+            {/* HUD corners */}
+            {[
+              { top: 8,  left: 8,  borderTopWidth: 1,    borderLeftWidth: 1 },
+              { top: 8,  right: 8, borderTopWidth: 1,    borderRightWidth: 1 },
+              { bottom: 8, left: 8,  borderBottomWidth: 1, borderLeftWidth: 1 },
+              { bottom: 8, right: 8, borderBottomWidth: 1, borderRightWidth: 1 },
+            ].map((s, i) => (
+              <View key={i} style={{ position: "absolute", width: 14, height: 14, borderColor: `${stageCol}50`, ...s }} />
+            ))}
+            <Text style={{ fontSize: 68 }}>{glyph}</Text>
+          </View>
+          <Text style={{ color: C.grey, fontFamily: SANS, fontSize: 9, marginTop: 10, letterSpacing: 1.5 }}>
+            {isHarvest ? "🌿 HARVEST READY" : "🏡 REAL-TIME GROW"}
+          </Text>
+        </View>
+
+        {/* ── Harvest button ─── */}
+        {isHarvest && !alreadyHarvested && (
+          <TouchableOpacity
+            onPress={harvest}
+            style={{
+              marginHorizontal: 16, marginBottom: 16,
+              backgroundColor: `${m.colour}10`,
+              borderRadius: 16, borderWidth: 1.5, borderColor: `${m.colour}70`,
+              padding: 22, alignItems: "center",
+              shadowColor: m.colour, shadowOpacity: 0.3, shadowRadius: 16, elevation: 8,
+            }}>
+            <Text style={{ fontSize: 28 }}>🏆</Text>
+            <Text style={{
+              color: m.colour, fontFamily: HEADING, fontSize: 30, marginTop: 8, letterSpacing: 3,
+              textShadowColor: `${m.colour}60`, textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 10,
+            }}>
+              HARVEST NOW
+            </Text>
+            <Text style={{ color: `${m.colour}80`, fontFamily: SANS, fontSize: 12, marginTop: 4 }}>
+              Add {growData.strainData.name} to your {m.rarity.toLowerCase()} collection
+            </Text>
+          </TouchableOpacity>
+        )}
+
+        {/* ── Description cards ─── */}
+        {description && (
+          <View style={{ paddingHorizontal: 16 }}>
+            {/* What you see */}
+            <View style={{
+              backgroundColor: C.card,
+              borderRadius: 14, borderWidth: 1, borderColor: C.border,
+              borderLeftWidth: 2, borderLeftColor: m.colour,
+              padding: 14, marginBottom: 10,
+            }}>
+              <Text style={{ color: C.greyLight, fontFamily: SANS_MED, fontSize: 10, letterSpacing: 2, marginBottom: 6 }}>
+                👁  WHAT YOU SEE
+              </Text>
+              <Text style={{ color: C.white, fontFamily: SANS, fontSize: 13, lineHeight: 21, opacity: 0.88 }}>
+                {description.visual}
+              </Text>
+            </View>
+
+            {/* Smell */}
+            <View style={{
+              backgroundColor: C.card,
+              borderRadius: 14, borderWidth: 1, borderColor: C.border,
+              padding: 14, marginBottom: 10,
+            }}>
+              <Text style={{ color: C.greyLight, fontFamily: SANS_MED, fontSize: 10, letterSpacing: 2, marginBottom: 6 }}>
+                👃  WHAT YOU SMELL
+              </Text>
+              <Text style={{ color: C.lavender, fontFamily: SANS, fontSize: 13, lineHeight: 21 }}>
+                {description.smell}
+              </Text>
+            </View>
+
+            {/* What's happening */}
+            <View style={{
+              backgroundColor: C.card,
+              borderRadius: 14, borderWidth: 1, borderColor: C.border,
+              padding: 14, marginBottom: 10,
+            }}>
+              <Text style={{ color: C.greyLight, fontFamily: SANS_MED, fontSize: 10, letterSpacing: 2, marginBottom: 6 }}>
+                🌱  WHAT'S HAPPENING
+              </Text>
+              <Text style={{ color: C.greyLight, fontFamily: SANS, fontSize: 12, lineHeight: 19 }}>
+                {description.stageDesc}
+              </Text>
+            </View>
+
+            {/* Grower tip */}
+            <View style={{
+              backgroundColor: C.greenFaint,
+              borderRadius: 14, borderWidth: 1, borderColor: "rgba(61,255,160,0.12)",
+              padding: 14, marginBottom: 10,
+            }}>
+              <Text style={{ color: C.greenDim, fontFamily: SANS_MED, fontSize: 10, letterSpacing: 2, marginBottom: 6 }}>
+                💡  IF THIS WERE REAL
+              </Text>
+              <Text style={{ color: C.white, fontFamily: SANS, fontSize: 12, lineHeight: 19, opacity: 0.82 }}>
+                {description.tip}
+              </Text>
+            </View>
+
+            {/* Strain info chips */}
+            <View style={{
+              backgroundColor: C.card,
+              borderRadius: 14, borderWidth: 1, borderColor: C.border,
+              padding: 16, marginBottom: 10,
+            }}>
+              <Text style={{ color: C.greyLight, fontFamily: SANS_MED, fontSize: 10, letterSpacing: 2, marginBottom: 12 }}>
+                STRAIN INFO
+              </Text>
+              <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
+                {[
+                  { l: "THC",    v: `${growData.strainData.thc_max}%`,  c: C.red },
+                  { l: "TYPE",   v: typeLabel,                           c: C.blue },
+                  { l: "FLOWER", v: `${growData.strainData.flower_wk_max}WK`, c: C.amber },
+                  { l: "TIER",   v: growData.strainData.tier,            c: m.colour },
+                ].map(({ l, v, c }) => (
+                  <View key={l} style={{
+                    backgroundColor: "rgba(255,255,255,0.02)",
+                    borderRadius: 10, borderWidth: 1, borderColor: "rgba(255,255,255,0.06)",
+                    padding: 10, alignItems: "center", minWidth: 72,
+                  }}>
+                    <Text style={{ color: C.grey, fontFamily: SANS, fontSize: 9, letterSpacing: 0.5 }}>{l}</Text>
+                    <Text style={{ color: c, fontFamily: HEADING, fontSize: 18, marginTop: 2 }}>{v}</Text>
+                  </View>
+                ))}
+              </View>
+              {growData.strainData.aroma ? (
+                <Text style={{ color: C.grey, fontFamily: SANS, fontSize: 11, marginTop: 12, lineHeight: 18 }}>
+                  {growData.strainData.aroma}
+                </Text>
+              ) : null}
+            </View>
+
+            {/* Replace strain */}
+            <TouchableOpacity
+              onPress={() => setPickerVisible(true)}
+              style={{
+                backgroundColor: C.surface,
+                borderRadius: 12, borderWidth: 1, borderColor: C.border,
+                padding: 14, alignItems: "center",
+              }}>
+              <Text style={{ color: C.greyLight, fontFamily: HEADING, fontSize: 16, letterSpacing: 1 }}>
+                🔄  CHANGE STRAIN
+              </Text>
+              <Text style={{ color: C.grey, fontFamily: SANS, fontSize: 10, marginTop: 2 }}>
+                Abandons current grow
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      </ScrollView>
+    </View>
+  );
+}

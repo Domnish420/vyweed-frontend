@@ -52,19 +52,38 @@ function buildSystemMessage(screen, screenCtx, outdoorCtx) {
     );
   }
 
-  if (screen === "grow" && d?.strainName) {
-    return (
-      base +
-      `The user is in the virtual grow game, currently growing "${d.strainName}".\n\n` +
-      `Strain: ${d.strainName} (${d.tier}, ${d.difficulty}, up to ${d.thcMax}% THC)\n` +
-      `Aroma: ${d.aroma}\n` +
-      `Day: ${d.day} of ${d.totalDays} · Stage: ${d.stage}\n` +
-      `What's happening: ${d.stageDesc}\n` +
-      `Grower tip: ${d.tip}\n` +
-      (d.isHarvest ? "Status: HARVEST READY\n" : "") +
-      `Trophies collected: ${d.trophyCount}\n` +
-      "\nAnswer questions about this specific strain and stage. Reference day " + d.day + " / " + d.stage + " in your advice."
-    );
+  if (screen === "grow") {
+    const ctxScreen = screenCtx?.screen;
+
+    if (ctxScreen === "greenhouse" && d?.strainName) {
+      return (
+        base +
+        `The user is in GREENHOUSE mode — a real-time grow where 1 real day = 3 grow days.\n\n` +
+        `Strain: ${d.strainName} (${d.tier}, ${d.difficulty}, up to ${d.thcMax}% THC)\n` +
+        `Aroma: ${d.aroma}\n` +
+        `Day: ${d.day} of ${d.totalDays} · Stage: ${d.stage}\n` +
+        `What's happening: ${d.stageDesc}\n` +
+        `Grower tip: ${d.tip}\n` +
+        (d.isHarvest ? "Status: HARVEST READY — the plant has completed its cycle.\n" : "") +
+        (d.nextDayIn ? `Next grow day advances in: ${d.nextDayIn}\n` : "") +
+        "\nThis is a real-time simulation. Reference the exact day and stage. Give actionable advice as if monitoring a real plant at this stage."
+      );
+    }
+
+    if (d?.strainName) {
+      return (
+        base +
+        `The user is in the virtual grow game (Gacha mode), currently growing "${d.strainName}".\n\n` +
+        `Strain: ${d.strainName} (${d.tier}, ${d.difficulty}, up to ${d.thcMax}% THC)\n` +
+        `Aroma: ${d.aroma}\n` +
+        `Day: ${d.day} of ${d.totalDays} · Stage: ${d.stage}\n` +
+        `What's happening: ${d.stageDesc}\n` +
+        `Grower tip: ${d.tip}\n` +
+        (d.isHarvest ? "Status: HARVEST READY\n" : "") +
+        `Trophies collected: ${d.trophyCount}\n` +
+        "\nAnswer questions about this specific strain and stage. Reference day " + d.day + " / " + d.stage + " in your advice."
+      );
+    }
   }
 
   if (screen === "vpd" && d?.vpd !== undefined) {
@@ -391,13 +410,15 @@ export default function GrowverFAB({ screen, onOpenFull }) {
               {(screen === "outdoor" ? weatherCtx.current : screenCtxRef.current?.data) && (
                 <View style={{ backgroundColor: "#0a1a0a", borderBottomWidth: 1, borderColor: C.border, paddingHorizontal: 14, paddingVertical: 7, flexDirection: "row", alignItems: "center", gap: 6 }}>
                   <Text style={{ fontSize: 11 }}>
-                    {screen === "outdoor" ? "🌤" : screen === "browse" ? "🌿" : screen === "grow" ? "🎮" : screen === "vpd" ? "💧" : "📋"}
+                    {screen === "outdoor" ? "🌤" : screen === "browse" ? "🌿" : screen === "grow" ? (screenCtxRef.current?.screen === "greenhouse" ? "🏡" : "🎮") : screen === "vpd" ? "💧" : "📋"}
                   </Text>
                   <Text style={{ color: C.greenDim, fontFamily: MONO, fontSize: 10 }}>
                     {screen === "outdoor" && weatherCtx.current
                       ? `Weather-aware · ${weatherCtx.current.temp}°C · ${weatherCtx.current.city}`
                       : screen === "browse" && screenCtxRef.current?.data?.strainName
                       ? `Viewing: ${screenCtxRef.current.data.strainName}`
+                      : screen === "grow" && screenCtxRef.current?.screen === "greenhouse" && screenCtxRef.current?.data?.strainName
+                      ? `🏡 Greenhouse: ${screenCtxRef.current.data.strainName} · Day ${screenCtxRef.current.data.day} · ${screenCtxRef.current.data.stage}`
                       : screen === "grow" && screenCtxRef.current?.data?.strainName
                       ? `Growing: ${screenCtxRef.current.data.strainName} · Day ${screenCtxRef.current.data.day} · ${screenCtxRef.current.data.stage}`
                       : screen === "vpd" && screenCtxRef.current?.data?.vpd !== undefined
