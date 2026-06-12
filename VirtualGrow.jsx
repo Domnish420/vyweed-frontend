@@ -581,7 +581,7 @@ export default function VirtualGrow() {
 
   // Load strain pool once on mount, then keep it in memory for instant re-rolls
   useEffect(() => {
-    cachedFetch(`${API_BASE}/search?per_page=200&sort=name`)
+    cachedFetch(`${API_BASE}/search?per_page=100&sort=name`)
       .then(result => {
         const strains = result.data?.results || [];
         if (strains.length > 0) {
@@ -804,13 +804,50 @@ export default function VirtualGrow() {
     return <TrophyCollection trophies={trophies} onBack={() => setScreen("main")} />;
   }
 
-  if (loading || !strain) {
+  if (loading) {
     return (
       <View style={{ flex: 1, backgroundColor: C.bg, alignItems: "center", justifyContent: "center" }}>
         <ActivityIndicator color={C.green} size="large" />
         <Text style={{ color: C.grey, fontFamily: SANS, fontSize: 13, marginTop: 14, letterSpacing: 1 }}>
           Rolling your next strain...
         </Text>
+      </View>
+    );
+  }
+
+  if (!strain) {
+    return (
+      <View style={{ flex: 1, backgroundColor: C.bg, alignItems: "center", justifyContent: "center", padding: 32 }}>
+        <Text style={{ fontSize: 40, marginBottom: 16 }}>📡</Text>
+        <Text style={{ color: C.white, fontFamily: HEADING, fontSize: 28, letterSpacing: 2, textAlign: "center" }}>
+          BACKEND OFFLINE
+        </Text>
+        <Text style={{ color: C.greyLight, fontFamily: SANS, fontSize: 13, marginTop: 10, textAlign: "center", lineHeight: 20 }}>
+          Make sure your backend is running{"\n"}and ngrok is active, then retry.
+        </Text>
+        <TouchableOpacity
+          onPress={() => {
+            setLoading(true);
+            cachedFetch(`${API_BASE}/search?per_page=100&sort=name`)
+              .then(result => {
+                const strains = result.data?.results || [];
+                if (strains.length > 0) {
+                  strainsPoolRef.current = strains;
+                  setStrain(getRandomStrain(strains));
+                }
+              })
+              .catch(() => {})
+              .finally(() => setLoading(false));
+          }}
+          style={{
+            marginTop: 28, backgroundColor: C.greenFaint,
+            borderRadius: 12, borderWidth: 1, borderColor: C.greenDim,
+            paddingHorizontal: 32, paddingVertical: 14,
+          }}>
+          <Text style={{ color: C.green, fontFamily: HEADING, fontSize: 22, letterSpacing: 2 }}>
+            RETRY →
+          </Text>
+        </TouchableOpacity>
       </View>
     );
   }
