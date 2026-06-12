@@ -19,6 +19,10 @@ export default {
         : IS_PREVIEW
         ? 'com.vyweed.app.preview'
         : 'com.vyweed.app',
+      infoPlist: {
+        NSLocationWhenInUseUsageDescription:
+          "VYWEED needs your location to show live outdoor growing conditions for your area.",
+      },
     },
 
     android: {
@@ -49,15 +53,7 @@ export default {
       favicon: './assets/favicon.png',
     },
 
-    plugins: [
-      'expo-notifications',
-      [
-        'expo-location',
-        {
-          locationWhenInUsePermission: "VYWEED needs your location to show live outdoor growing conditions for your area.",
-        },
-      ],
-    ],
+    plugins: ['expo-notifications'],
 
     extra: {
       appEnv:                    process.env.APP_ENV                    ?? 'development',
