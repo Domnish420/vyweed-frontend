@@ -36,25 +36,30 @@ import { getApiV1, BACKEND_HEADERS } from "./apiConfig";
 const API_BASE = { toString: () => getApiV1() };
 // All `${API_BASE}` usages will now call getApiV1() at interpolation time.
 
-// ── Palette — same as grow tracker for cohesion ───────────────────────────────
+// ── Palette ───────────────────────────────────────────────────────────────────
 const C = {
-  bg:         "#070a07",
-  surface:    "#0d120d",
-  card:       "#111811",
-  border:     "#1a2a1a",
-  green:      "#39ff45",
-  greenDim:   "#1a7a20",
-  greenFaint: "#0d3d12",
-  amber:      "#ffb830",
-  red:        "#ff3a3a",
-  blue:       "#30d5ff",
-  purple:     "#c084fc",
-  white:      "#e8f0e8",
-  grey:       "#4a5a4a",
-  greyLight:  "#8a9a8a",
+  bg:          "#0a0f0a",
+  surface:     "#0f150f",
+  card:        "#141a13",
+  border:      "#2a3d2e",
+  green:       "#4d7358",
+  greenDim:    "#3a5c44",
+  greenFaint:  "#1a2d1f",
+  greenBright: "#6db87f",
+  amber:       "#c17a4a",
+  red:         "#b85c3a",
+  blue:        "#5b9bd5",
+  purple:      "#9b7fc7",
+  white:       "#e8e4d9",
+  grey:        "#4a5a4a",
+  greyLight:   "#8a9e8c",
 };
 
-const MONO = Platform.select({ ios: "Courier New", android: "monospace" });
+const HEADING  = "BebasNeue_400Regular";
+const SANS     = "SpaceGrotesk_400Regular";
+const SANS_MED = "SpaceGrotesk_500Medium";
+const SANS_BOLD = "SpaceGrotesk_700Bold";
+const MONO = SANS;
 
 // ── API ───────────────────────────────────────────────────────────────────────
 const api = {
@@ -86,8 +91,8 @@ function clamp(v, lo, hi) { return Math.min(hi, Math.max(lo, v)); }
 function Label({ children, style }) {
   return (
     <Text style={[{
-      color: C.greyLight, fontFamily: MONO, fontSize: 10,
-      letterSpacing: 1.5, textTransform: "uppercase",
+      color: C.greyLight, fontFamily: HEADING, fontSize: 13,
+      letterSpacing: 1,
     }, style]}>
       {children}
     </Text>
@@ -104,7 +109,7 @@ function Tag({ label, colour, onPress }) {
         borderRadius: 4, paddingHorizontal: 7, paddingVertical: 3,
       }}
     >
-      <Text style={{ color: colour || C.green, fontFamily: MONO, fontSize: 10, fontWeight: "bold" }}>
+      <Text style={{ color: colour || C.green, fontFamily: SANS_MED, fontSize: 11 }}>
         {label}
       </Text>
     </TouchableOpacity>
@@ -804,11 +809,13 @@ function StrainCard({ strain, onPress, hasTrophy, compareMode, isInCompare }) {
   return (
     <TouchableOpacity onPress={onPress} activeOpacity={0.8}>
       <View style={{
-        backgroundColor: isInCompare ? `${C.purple}15` : "rgba(255,255,255,0.03)",
+        backgroundColor: isInCompare ? `${C.purple}15` : C.card,
         borderRadius: 14,
         borderWidth: 1,
-        borderColor: isInCompare ? C.purple : "rgba(255,255,255,0.07)",
-        padding: 12, paddingRight: isInCompare ? 12 : 28, marginBottom: 10,
+        borderColor: isInCompare ? C.purple : C.border,
+        padding: 16, paddingRight: isInCompare ? 16 : 32, marginBottom: 12,
+        shadowColor: "#000", shadowOpacity: 0.25, shadowRadius: 8,
+        shadowOffset: { width: 0, height: 2 }, elevation: 3,
       }}>
         {/* Chevron — tap indicator */}
         {!compareMode && (
@@ -832,14 +839,14 @@ function StrainCard({ strain, onPress, hasTrophy, compareMode, isInCompare }) {
         <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" }}>
           <View style={{ flex: 1, marginRight: 8 }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-              <Text style={{ color: C.white, fontFamily: MONO, fontSize: 15, fontWeight: "bold" }}>
+              <Text style={{ color: C.white, fontFamily: HEADING, fontSize: 20 }}>
                 {strain.name}
               </Text>
               {hasTrophy && (
                 <Text style={{ fontSize: 12 }}>🏆</Text>
               )}
             </View>
-            <Text style={{ color: C.grey, fontFamily: MONO, fontSize: 10, marginTop: 2 }}>
+            <Text style={{ color: C.greyLight, fontFamily: SANS, fontSize: 11, marginTop: 2 }}>
               {strain.lineage?.slice(0, 48)}{strain.lineage?.length > 48 ? "…" : ""}
             </Text>
           </View>
@@ -1004,11 +1011,11 @@ function FilterSheet({ visible, filters, active, onApply, onClose }) {
             alignItems: "center", paddingHorizontal: 16, paddingBottom: 12,
             borderBottomWidth: 1, borderColor: C.border,
           }}>
-            <Text style={{ color: C.white, fontFamily: MONO, fontSize: 14, fontWeight: "bold" }}>
+            <Text style={{ color: C.white, fontFamily: HEADING, fontSize: 20, letterSpacing: 1 }}>
               FILTERS
             </Text>
             <TouchableOpacity onPress={clear}>
-              <Text style={{ color: C.amber, fontFamily: MONO, fontSize: 12 }}>CLEAR ALL</Text>
+              <Text style={{ color: C.amber, fontFamily: SANS_MED, fontSize: 12 }}>Clear all</Text>
             </TouchableOpacity>
           </View>
 
@@ -1083,16 +1090,15 @@ function FilterSheet({ visible, filters, active, onApply, onClose }) {
                 flex: 1, borderWidth: 1, borderColor: C.border,
                 borderRadius: 6, padding: 12, alignItems: "center",
               }}>
-              <Text style={{ color: C.greyLight, fontFamily: MONO, fontSize: 13 }}>CANCEL</Text>
+              <Text style={{ color: C.greyLight, fontFamily: SANS_MED, fontSize: 13 }}>Cancel</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={() => { onApply(local); onClose(); }}
               style={{
                 flex: 2, backgroundColor: C.greenFaint,
                 borderWidth: 1, borderColor: C.green,
-                borderRadius: 6, padding: 12, alignItems: "center",
+                borderRadius: 8, padding: 14, alignItems: "center",
               }}>
-              <Text style={{ color: C.green, fontFamily: MONO,
-                fontSize: 13, fontWeight: "bold" }}>
+              <Text style={{ color: C.greenBright, fontFamily: HEADING, fontSize: 16, letterSpacing: 1 }}>
                 APPLY FILTERS
               </Text>
             </TouchableOpacity>
@@ -1355,8 +1361,8 @@ function StrainDetailScreen({ strainId, onBack, onStartGrow, onNavigateToStrain 
           <Text style={{ color: C.green, fontFamily: MONO, fontSize: 18, lineHeight: 22 }}>‹</Text>
         </TouchableOpacity>
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
-          <Text style={{ color: C.white, fontFamily: MONO, fontSize: 22,
-            fontWeight: "bold", flex: 1, marginRight: 10 }}>
+          <Text style={{ color: C.white, fontFamily: HEADING, fontSize: 28,
+            flex: 1, marginRight: 10, letterSpacing: 1 }}>
             {data.name}
           </Text>
           <InfoBtn onPress={() => setShowInfo(true)} />
@@ -1381,23 +1387,22 @@ function StrainDetailScreen({ strainId, onBack, onStartGrow, onNavigateToStrain 
             <View style={{ flex: 1, alignItems: "center" }}>
               <Label>THC</Label>
               <Text style={{
-                color: data.thc_max >= 25 ? C.red : data.thc_max >= 20 ? C.amber : C.green,
-                fontFamily: MONO, fontSize: 28, fontWeight: "bold", marginTop: 4,
+                color: data.thc_max >= 25 ? C.red : data.thc_max >= 20 ? C.amber : C.greenBright,
+                fontFamily: SANS_BOLD, fontSize: 28, marginTop: 4,
               }}>
                 {data.thc_max}%
               </Text>
-              <Text style={{ color: C.grey, fontFamily: MONO, fontSize: 10 }}>
+              <Text style={{ color: C.greyLight, fontFamily: SANS, fontSize: 10 }}>
                 range {data.thc_min}–{data.thc_max}%
               </Text>
             </View>
             <View style={{ width: 1, backgroundColor: C.border }} />
             <View style={{ flex: 1, alignItems: "center" }}>
               <Label>CBD</Label>
-              <Text style={{ color: C.blue, fontFamily: MONO, fontSize: 28,
-                fontWeight: "bold", marginTop: 4 }}>
+              <Text style={{ color: C.blue, fontFamily: SANS_BOLD, fontSize: 28, marginTop: 4 }}>
                 {data.cbd_max >= 5 ? `${data.cbd_max}%` : "LOW"}
               </Text>
-              <Text style={{ color: C.grey, fontFamily: MONO, fontSize: 10 }}>
+              <Text style={{ color: C.greyLight, fontFamily: SANS, fontSize: 10 }}>
                 max {data.cbd_max}%
               </Text>
             </View>
@@ -1580,8 +1585,7 @@ function StrainDetailScreen({ strainId, onBack, onStartGrow, onNavigateToStrain 
               padding: 16, alignItems: "center", marginBottom: 8,
             }}
           >
-            <Text style={{ color: C.green, fontFamily: MONO,
-              fontSize: 15, fontWeight: "bold", letterSpacing: 1 }}>
+            <Text style={{ color: C.greenBright, fontFamily: HEADING, fontSize: 18, letterSpacing: 1 }}>
               🌱 START GROW WITH THIS STRAIN
             </Text>
           </TouchableOpacity>
@@ -1664,8 +1668,7 @@ function RecommendScreen({ onBack, onSelectStrain }) {
         <TouchableOpacity onPress={onBack} style={{ marginRight: 12 }}>
           <Text style={{ color: C.green, fontFamily: MONO, fontSize: 18 }}>←</Text>
         </TouchableOpacity>
-        <Text style={{ color: C.white, fontFamily: MONO, fontSize: 16,
-          fontWeight: "bold", flex: 1 }}>
+        <Text style={{ color: C.white, fontFamily: HEADING, fontSize: 22, letterSpacing: 1, flex: 1 }}>
           STRAIN RECOMMENDER
         </Text>
         <InfoBtn onPress={() => setShowInfo(true)} />
@@ -1744,8 +1747,7 @@ function RecommendScreen({ onBack, onSelectStrain }) {
         >
           {loading
             ? <ActivityIndicator color={C.green} />
-            : <Text style={{ color: C.green, fontFamily: MONO,
-                fontSize: 14, fontWeight: "bold", letterSpacing: 1 }}>
+            : <Text style={{ color: C.greenBright, fontFamily: HEADING, fontSize: 18, letterSpacing: 1 }}>
                 FIND MY STRAIN →
               </Text>
           }
@@ -2029,11 +2031,10 @@ export default function VYWEEDStrainBrowser({ onSelectStrain }) {
         <View style={{ flexDirection: "row", alignItems: "center",
           justifyContent: "space-between", marginBottom: 10 }}>
           <View>
-            <Text style={{ color: C.white, fontFamily: MONO,
-              fontSize: 22, fontWeight: "900", letterSpacing: 2 }}>
-              VY<Text style={{ color: C.green }}>WEED</Text>
+            <Text style={{ color: C.white, fontFamily: HEADING, fontSize: 30, letterSpacing: 3 }}>
+              VY<Text style={{ color: C.greenBright }}>WEED</Text>
             </Text>
-            <Label>STRAIN BROWSER</Label>
+            <Label style={{ color: C.greenDim }}>STRAIN BROWSER</Label>
           </View>
           <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
             <InfoBtn onPress={() => setShowInfo(true)} />
@@ -2042,24 +2043,23 @@ export default function VYWEEDStrainBrowser({ onSelectStrain }) {
                 borderRadius: 6, borderWidth: 1,
                 borderColor: compareMode ? C.purple : C.border,
                 paddingHorizontal: 10, paddingVertical: 8 }}>
-              <Text style={{ color: compareMode ? C.purple : C.greyLight,
-                fontFamily: MONO, fontSize: 10, fontWeight: "bold" }}>
+              <Text style={{ color: compareMode ? C.purple : C.greyLight, fontFamily: HEADING, fontSize: 13 }}>
                 {compareMode ? `⚖️ ${compareSlots.length}/3` : "⚖️ COMPARE"}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={() => setScreen("yield")}
-              style={{ backgroundColor: C.surface, borderRadius: 6,
+              style={{ backgroundColor: C.surface, borderRadius: 8,
                 borderWidth: 1, borderColor: C.amber,
                 paddingHorizontal: 10, paddingVertical: 8 }}>
-              <Text style={{ color: C.amber, fontFamily: MONO, fontSize: 10, fontWeight: "bold" }}>
+              <Text style={{ color: C.amber, fontFamily: HEADING, fontSize: 13 }}>
                 📦 YIELD
               </Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={() => setScreen("recommend")}
-              style={{ backgroundColor: C.greenFaint, borderRadius: 6,
+              style={{ backgroundColor: C.greenFaint, borderRadius: 8,
                 borderWidth: 1, borderColor: C.green,
                 paddingHorizontal: 12, paddingVertical: 8 }}>
-              <Text style={{ color: C.green, fontFamily: MONO, fontSize: 11, fontWeight: "bold" }}>
+              <Text style={{ color: C.greenBright, fontFamily: HEADING, fontSize: 14 }}>
                 🎯 FIND MINE
               </Text>
             </TouchableOpacity>
@@ -2149,7 +2149,7 @@ export default function VYWEEDStrainBrowser({ onSelectStrain }) {
         {/* Results count + active filter chips */}
         <View style={{ flexDirection: "row", alignItems: "center",
           marginTop: 8, flexWrap: "wrap", gap: 6 }}>
-          <Text style={{ color: C.grey, fontFamily: MONO, fontSize: 11 }}>
+          <Text style={{ color: C.greyLight, fontFamily: HEADING, fontSize: 13 }}>
             {loading ? "SEARCHING..." : `${total.toLocaleString()} STRAINS`}
           </Text>
           {filters.type && <Tag label={filters.type} colour={TYPE_COLOUR[filters.type]}

@@ -20,6 +20,13 @@ import {
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { useFonts } from "expo-font";
+import { BebasNeue_400Regular } from "@expo-google-fonts/bebas-neue";
+import {
+  SpaceGrotesk_400Regular,
+  SpaceGrotesk_500Medium,
+  SpaceGrotesk_700Bold,
+} from "@expo-google-fonts/space-grotesk";
 import { setApiBaseUrl } from "./apiConfig";
 
 import VYWEEDStrainBrowser from "./VYWEEDStrainBrowser";
@@ -41,21 +48,26 @@ const { width: SW } = Dimensions.get("window");
 
 // ── Palette ───────────────────────────────────────────────────────────────────
 const C = {
-  bg:         "#070a07",
-  surface:    "#0d120d",
-  card:       "#111811",
-  border:     "#1a2a1a",
-  green:      "#39ff45",
-  greenFaint: "#0d3d12",
-  greenDim:   "#1a7a20",
-  amber:      "#ffb830",
-  blue:       "#30d5ff",
-  grey:       "#4a5a4a",
-  greyLight:  "#8a9a8a",
-  white:      "#e8f0e8",
+  bg:          "#0a0f0a",
+  surface:     "#0f150f",
+  card:        "#141a13",
+  border:      "#2a3d2e",
+  green:       "#4d7358",
+  greenFaint:  "#1a2d1f",
+  greenDim:    "#3a5c44",
+  greenBright: "#6db87f",
+  amber:       "#c17a4a",
+  blue:        "#5b9bd5",
+  grey:        "#4a5a4a",
+  greyLight:   "#8a9e8c",
+  white:       "#e8e4d9",
 };
 
-const MONO = Platform.select({ ios: "Courier New", android: "monospace" });
+const HEADING = "BebasNeue_400Regular";
+const SANS    = "SpaceGrotesk_400Regular";
+const SANS_MED  = "SpaceGrotesk_500Medium";
+const SANS_BOLD = "SpaceGrotesk_700Bold";
+const MONO = SANS;
 
 // Screens where the Growver FAB floats (excludes the Growver tab itself)
 const GROWVER_FAB_SCREENS = ["grows", "browse", "vpd", "grow", "outdoor"];
@@ -95,7 +107,7 @@ function TabBar({ active, onPress, growCount, tabs }) {
             style={{
               flex: 1, alignItems: "center", paddingVertical: 4,
               borderTopWidth: 2,
-              borderColor: isActive ? C.green : "transparent",
+              borderColor: isActive ? C.greenBright : "transparent",
             }}
           >
             {/* Icon with badge for grows */}
@@ -119,11 +131,10 @@ function TabBar({ active, onPress, growCount, tabs }) {
               )}
             </View>
             <Text style={{
-              color: isActive ? C.green : C.grey,
-              fontFamily: MONO,
-              fontSize: 9,
-              fontWeight: isActive ? "bold" : "normal",
-              letterSpacing: 0.8,
+              color: isActive ? C.greenBright : C.grey,
+              fontFamily: HEADING,
+              fontSize: 11,
+              letterSpacing: 0.5,
               marginTop: 3,
             }}>
               {tab.label}
@@ -245,6 +256,12 @@ function AppInner() {
 
 export default function App() {
   const [ready, setReady] = useState(false);
+  const [fontsLoaded] = useFonts({
+    BebasNeue_400Regular,
+    SpaceGrotesk_400Regular,
+    SpaceGrotesk_500Medium,
+    SpaceGrotesk_700Bold,
+  });
 
   useEffect(() => {
     AsyncStorage.getItem("vyweed_settings")
@@ -258,9 +275,9 @@ export default function App() {
       .finally(() => setReady(true));
   }, []);
 
-  if (!ready) return (
-    <View style={{ flex: 1, backgroundColor: "#070a07", alignItems: "center", justifyContent: "center" }}>
-      <Text style={{ color: "#39ff45", fontFamily: Platform.select({ ios: "Courier New", android: "monospace" }), fontSize: 12 }}>
+  if (!ready || !fontsLoaded) return (
+    <View style={{ flex: 1, backgroundColor: "#0a0f0a", alignItems: "center", justifyContent: "center" }}>
+      <Text style={{ color: "#4d7358", fontSize: 28, letterSpacing: 4, fontFamily: "BebasNeue_400Regular" }}>
         VYWEED
       </Text>
     </View>
