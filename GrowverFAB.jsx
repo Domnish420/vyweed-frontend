@@ -8,6 +8,7 @@ import {
   Dimensions, StyleSheet,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getApiBaseUrl } from "./apiConfig";
 const API_BASE_URL = { toString: () => getApiBaseUrl() };
 
@@ -36,7 +37,7 @@ const SCREEN_CHIPS = {
   browse:  ["Is this strain for beginners?", "Best strain for yield?", "Indica vs sativa effects?"],
   vpd:     ["Explain VPD to me", "Optimal VPD for flowering?", "How do I lower my VPD?"],
   grow:    ["How do I earn trophies?", "Explain grow stages", "What triggers flowering?"],
-  outdoor: ["When do I plant outside?", "Best outdoor strains?", "How do I deal with pests?"],
+  outdoor: ["How does today's weather affect my plants?", "Is it safe to plant right now?", "What should I watch for in these conditions?"],
 };
 
 const MAX_HISTORY = 10;
@@ -124,14 +125,15 @@ export default function GrowverFAB({ screen, onOpenFull }) {
   const [loading, setLoading]       = useState(false);
   const [model, setModel]           = useState("llama3.2");
 
-  const insets     = useSafeAreaInsets();
-  const slideAnim  = useRef(new Animated.Value(PANEL_H)).current;
-  const fadeAnim   = useRef(new Animated.Value(0)).current;
-  const scaleAnim  = useRef(new Animated.Value(0)).current;
-  const glowAnim   = useRef(new Animated.Value(0)).current;
-  const listRef    = useRef(null);
-  const inputRef   = useRef(null);
-  const hasOpened  = useRef(false);
+  const insets       = useSafeAreaInsets();
+  const slideAnim    = useRef(new Animated.Value(PANEL_H)).current;
+  const fadeAnim     = useRef(new Animated.Value(0)).current;
+  const scaleAnim    = useRef(new Animated.Value(0)).current;
+  const glowAnim     = useRef(new Animated.Value(0)).current;
+  const listRef      = useRef(null);
+  const inputRef     = useRef(null);
+  const hasOpened    = useRef(false);
+  const weatherCtx   = useRef(null); // live outdoor weather context for injection
 
   // Entrance + glow when FAB mounts
   useEffect(() => {
@@ -149,17 +151,22 @@ export default function GrowverFAB({ screen, onOpenFull }) {
     hasOpened.current = true;
     setPanelOpen(true);
     Animated.parallel([
-      Animated.spring(slideAnim, { toValue: 0, useNativeDriver: true,
-                                    tension: 65, friction: 11 }),
+      Animated.spring(slideAnim, { toValue: 0, useNativeDriver: true, tension: 65, friction: 11 }),
       Animated.timing(fadeAnim,  { toValue: 1, duration: 220, useNativeDriver: true }),
     ]).start();
+    // Load outdoor weather context so every message from this screen is weather-aware
+    if (screen === "outdoor") {
+      AsyncStorage.getItem("vyweed_outdoor_weather")
+        .then(raw => { if (raw) weatherCtx.current = JSON.parse(raw); })
+        .catch(() => {});
+    }
     // Probe Ollama silently on first open
     if (!hasOpened.current) {
       fetch(`${API_BASE_URL}/api/v1/growver/status`, { signal: AbortSignal.timeout?.(4000), headers: { 'ngrok-skip-browser-warning': 'true' } })
         .then(r => r.json()).then(d => { if (d.models?.length) setModel(d.models[0]); })
         .catch(() => {});
     }
-  }, []);
+  }, [screen]);
 
   const closePanel = useCallback(() => {
     Animated.parallel([
@@ -181,7 +188,13 @@ export default function GrowverFAB({ screen, onOpenFull }) {
     addMsg("user", t);
     setLoading(true);
 
-    const history = [...messages, { role: "user", content: t }]
+    // On the first outdoor message inject live weather as invisible context
+    const ctx = screen === "outdoor" && messages.length === 0 ? weatherCtx.current : null;
+    const contextPrefix = ctx
+      ? `[Outdoor context: ${ctx.summary} Location: ${ctx.city}, ${ctx.country}.]\n\n`
+      : "";
+
+    const history = [...messages, { role: "user", content: contextPrefix + t }]
       .slice(-MAX_HISTORY)
       .map(({ role, content }) => ({ role, content }));
 
@@ -267,6 +280,16 @@ export default function GrowverFAB({ screen, onOpenFull }) {
                   </TouchableOpacity>
                 </View>
               </View>
+
+              {/* Outdoor weather sync indicator */}
+              {screen === "outdoor" && weatherCtx.current && (
+                <View style={{ backgroundColor: "#0a1a0a", borderBottomWidth: 1, borderColor: C.border, paddingHorizontal: 14, paddingVertical: 7, flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <Text style={{ fontSize: 11 }}>🌤</Text>
+                  <Text style={{ color: C.greenDim, fontFamily: MONO, fontSize: 10 }}>
+                    Weather-aware · {weatherCtx.current.temp}°C · {weatherCtx.current.city}
+                  </Text>
+                </View>
+              )}
 
               {/* Messages or suggestion chips */}
               <View style={{ flex: 1 }}>

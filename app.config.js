@@ -40,6 +40,8 @@ export default {
         'android.permission.WRITE_EXTERNAL_STORAGE',
         'android.permission.RECEIVE_BOOT_COMPLETED',
         'android.permission.VIBRATE',
+        'android.permission.ACCESS_COARSE_LOCATION',
+        'android.permission.ACCESS_FINE_LOCATION',
       ],
     },
 
@@ -47,7 +49,15 @@ export default {
       favicon: './assets/favicon.png',
     },
 
-    plugins: ['expo-notifications'],
+    plugins: [
+      'expo-notifications',
+      [
+        'expo-location',
+        {
+          locationWhenInUsePermission: "VYWEED needs your location to show live outdoor growing conditions for your area.",
+        },
+      ],
+    ],
 
     extra: {
       appEnv:                    process.env.APP_ENV                    ?? 'development',
