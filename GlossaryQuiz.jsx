@@ -114,7 +114,7 @@ function gradeColor(grade) {
 
 export default function GlossaryQuiz({ mode, onClose, isPro }) {
   const isDaily = mode === "daily";
-  const questionCount = isDaily ? 10 : 20;
+  const questionCount = isDaily ? 5 : 20;
   const maxAttempts = isDaily ? 3 : 7;
   const seedStr = isDaily ? todayStr() : isoWeek();
   const storageKey = isDaily
@@ -295,8 +295,8 @@ export default function GlossaryQuiz({ mode, onClose, isPro }) {
                 </Text>
                 <Text style={{ fontFamily: MONO, fontSize: 13, color: C.greyLight, textAlign: "center", lineHeight: 20 }}>
                   {isDaily
-                    ? "10 questions from the growing glossary.\nNew set every day."
-                    : "20 questions from the full glossary.\nOne attempt per day, resets weekly."}
+                    ? "5 questions from the growing glossary.\nNew set every day."
+                    : "20 questions across the full glossary.\nOne attempt per day, resets weekly."}
                 </Text>
               </View>
 
