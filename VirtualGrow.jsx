@@ -193,6 +193,79 @@ function getDayDescription(day, strain) {
   return { stage, stageDay, stageDesc, visual, smell, tip, isHarvest: stage === "Harvest Ready" || day >= totalDays };
 }
 
+// ── Inline timer hero (replaces plant visual while waiting for next pull) ─────
+function TimerHero({ remaining, totalWait, onSkipAd, onSkipToken }) {
+  const pct     = Math.max(0, 1 - remaining / Math.max(totalWait, 1));
+  const glowCol = C.amber;
+
+  return (
+    <View style={{ alignItems: "center", justifyContent: "center", height: 240 }}>
+      {/* Outer glow ring */}
+      <View style={{
+        position: "absolute",
+        width: 220, height: 220, borderRadius: 110,
+        backgroundColor: `${glowCol}08`,
+        borderWidth: 1, borderColor: `${glowCol}22`,
+      }} />
+      <View style={{
+        position: "absolute",
+        width: 140, height: 140, borderRadius: 70,
+        backgroundColor: `${glowCol}12`,
+      }} />
+
+      {/* HUD corners */}
+      {[
+        { top: 14, left: SW * 0.18, borderTopWidth: 1, borderLeftWidth: 1 },
+        { top: 14, right: SW * 0.18, borderTopWidth: 1, borderRightWidth: 1 },
+        { bottom: 14, left: SW * 0.18, borderBottomWidth: 1, borderLeftWidth: 1 },
+        { bottom: 14, right: SW * 0.18, borderBottomWidth: 1, borderRightWidth: 1 },
+      ].map((s, i) => (
+        <View key={i} style={{ position: "absolute", width: 18, height: 18, borderColor: `${glowCol}50`, ...s }} />
+      ))}
+
+      {/* Progress arc — thin bar underneath countdown */}
+      <View style={{
+        width: 180, height: 3, backgroundColor: C.border,
+        borderRadius: 2, overflow: "hidden", position: "absolute", bottom: 38,
+      }}>
+        <View style={{ width: `${pct * 100}%`, height: 3, backgroundColor: glowCol, borderRadius: 2 }} />
+      </View>
+
+      {/* Countdown */}
+      <Text style={{
+        color: glowCol, fontFamily: HEADING, fontSize: 52, letterSpacing: 4, lineHeight: 54,
+        textShadowColor: `${glowCol}70`, textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 16,
+      }}>
+        {formatSeconds(remaining)}
+      </Text>
+      <Text style={{ color: C.greyLight, fontFamily: SANS, fontSize: 10, marginTop: 6, letterSpacing: 2 }}>
+        UNTIL NEXT PULL
+      </Text>
+
+      {/* Skip buttons — sit inside the hero */}
+      <View style={{ flexDirection: "row", gap: 8, marginTop: 18 }}>
+        <TouchableOpacity onPress={onSkipAd} style={{
+          backgroundColor: "rgba(193,122,74,0.12)",
+          borderRadius: 10, borderWidth: 1, borderColor: `${C.amber}70`,
+          paddingHorizontal: 16, paddingVertical: 10, alignItems: "center",
+        }}>
+          <Text style={{ color: C.amber, fontFamily: HEADING, fontSize: 16, letterSpacing: 1 }}>📺 AD SKIP</Text>
+          <Text style={{ color: `${C.amber}80`, fontFamily: SANS, fontSize: 9, marginTop: 1 }}>30s unskippable</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity onPress={onSkipToken} style={{
+          backgroundColor: C.greenFaint,
+          borderRadius: 10, borderWidth: 1, borderColor: C.greenDim,
+          paddingHorizontal: 16, paddingVertical: 10, alignItems: "center",
+        }}>
+          <Text style={{ color: C.green, fontFamily: HEADING, fontSize: 16, letterSpacing: 1 }}>🎟 TOKEN</Text>
+          <Text style={{ color: C.greenDim, fontFamily: SANS, fontSize: 9, marginTop: 1 }}>skip entirely</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
 // ── Plant visual (stage glyph + glow rings + HUD brackets) ───────────────────
 function PlantVisual({ day, totalDays, stage, strain, isHarvest, anim }) {
   const pct = Math.min(1, day / totalDays);
@@ -572,8 +645,8 @@ export default function VirtualGrow() {
     startCountdown(waitSecs);
   };
 
-  // ── Waiting screen ──────────────────────────────────────────────────────────
-  if (timerActive && timerRemaining > 0 && !isIRL) {
+  // ── Waiting screen (full-screen fallback — only when strain pool not loaded) ──
+  if (timerActive && timerRemaining > 0 && !isIRL && !strain) {
     const pct = timerRemaining / getWaitSeconds(trophies.length);
 
     return (
@@ -761,7 +834,7 @@ export default function VirtualGrow() {
               VY<Text style={{ color: C.green }}>WEED</Text>
             </Text>
             <Text style={{ color: C.greyLight, fontFamily: SANS, fontSize: 10, letterSpacing: 2 }}>
-              {isIRL ? "GROW REFERENCE" : "GACHA GROW"}
+              {isIRL ? "GROW REFERENCE" : timerActive && timerRemaining > 0 ? "NEXT PULL LOADING..." : "GACHA GROW"}
             </Text>
           </View>
           <TouchableOpacity onPress={() => setScreen("collection")} style={{ alignItems: "center" }}>
@@ -821,58 +894,81 @@ export default function VirtualGrow() {
           </View>
         </View>
 
-        {/* ── Central plant viewport — isolated, max breathing room ──────── */}
-        <View style={{ alignItems: "center", paddingVertical: 4 }} {...panResponder.panHandlers}>
-          <Animated.View style={{ opacity: fadeAnim }}>
-            <PlantVisual
-              day={day}
-              totalDays={totalDays}
-              stage={description?.stage || "Seedling"}
-              strain={strain}
-              isHarvest={isHarvest}
-              anim={fadeAnim}
-            />
-          </Animated.View>
-          <Text style={{ color: C.grey, fontFamily: SANS, fontSize: 10, marginTop: 2, letterSpacing: 1 }}>
-            SWIPE TO TRAVEL THROUGH TIME
-          </Text>
-        </View>
+        {/* ── Central plant viewport OR inline timer hero ─────────────────── */}
+        {timerActive && timerRemaining > 0 ? (
+          <TimerHero
+            remaining={timerRemaining}
+            totalWait={getWaitSeconds(trophies.length)}
+            onSkipAd={async () => {
+              await skipTimer();
+              setTimerActive(false);
+              setTimerRemaining(0);
+              if (timerRef.current) clearInterval(timerRef.current);
+              loadNextStrain();
+            }}
+            onSkipToken={async () => {
+              await skipTimer();
+              setTimerActive(false);
+              setTimerRemaining(0);
+              if (timerRef.current) clearInterval(timerRef.current);
+              loadNextStrain();
+            }}
+          />
+        ) : (
+          <View style={{ alignItems: "center", paddingVertical: 4 }} {...panResponder.panHandlers}>
+            <Animated.View style={{ opacity: fadeAnim }}>
+              <PlantVisual
+                day={day}
+                totalDays={totalDays}
+                stage={description?.stage || "Seedling"}
+                strain={strain}
+                isHarvest={isHarvest}
+                anim={fadeAnim}
+              />
+            </Animated.View>
+            <Text style={{ color: C.grey, fontFamily: SANS, fontSize: 10, marginTop: 2, letterSpacing: 1 }}>
+              SWIPE TO TRAVEL THROUGH TIME
+            </Text>
+          </View>
+        )}
 
-        {/* ── Glass nav buttons ───────────────────────────────────────────── */}
-        <View style={{ flexDirection: "row", paddingHorizontal: 16, gap: 10, marginBottom: 16, marginTop: 8 }}>
-          <TouchableOpacity onPress={() => animateDay(-1)} disabled={day <= 1}
-            style={{
-              flex: 1,
-              backgroundColor: day <= 1 ? "rgba(255,255,255,0.01)" : "rgba(255,255,255,0.03)",
-              borderRadius: 12,
-              borderWidth: 1,
-              borderColor: day <= 1 ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.08)",
-              paddingVertical: 15, alignItems: "center",
-            }}>
-            <Text style={{
-              color: day <= 1 ? "rgba(255,255,255,0.2)" : C.green,
-              fontFamily: HEADING, fontSize: 18, letterSpacing: 1,
-            }}>
-              ← YESTERDAY
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => animateDay(1)} disabled={day >= totalDays}
-            style={{
-              flex: 1,
-              backgroundColor: day >= totalDays ? "rgba(255,215,0,0.06)" : "rgba(255,255,255,0.03)",
-              borderRadius: 12,
-              borderWidth: 1,
-              borderColor: day >= totalDays ? "rgba(255,215,0,0.35)" : "rgba(255,255,255,0.08)",
-              paddingVertical: 15, alignItems: "center",
-            }}>
-            <Text style={{
-              color: day >= totalDays ? "#ffd700" : C.green,
-              fontFamily: HEADING, fontSize: 18, letterSpacing: 1,
-            }}>
-              {day >= totalDays ? "HARVEST ✦" : "TOMORROW →"}
-            </Text>
-          </TouchableOpacity>
-        </View>
+        {/* ── Glass nav buttons (hidden while timer is active) ─────────────── */}
+        {!(timerActive && timerRemaining > 0) && (
+          <View style={{ flexDirection: "row", paddingHorizontal: 16, gap: 10, marginBottom: 16, marginTop: 8 }}>
+            <TouchableOpacity onPress={() => animateDay(-1)} disabled={day <= 1}
+              style={{
+                flex: 1,
+                backgroundColor: day <= 1 ? "rgba(255,255,255,0.01)" : "rgba(255,255,255,0.03)",
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: day <= 1 ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.08)",
+                paddingVertical: 15, alignItems: "center",
+              }}>
+              <Text style={{
+                color: day <= 1 ? "rgba(255,255,255,0.2)" : C.green,
+                fontFamily: HEADING, fontSize: 18, letterSpacing: 1,
+              }}>
+                ← YESTERDAY
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => animateDay(1)} disabled={day >= totalDays}
+              style={{
+                flex: 1,
+                backgroundColor: day >= totalDays ? "rgba(255,215,0,0.06)" : "rgba(255,255,255,0.03)",
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: day >= totalDays ? "rgba(255,215,0,0.35)" : "rgba(255,255,255,0.08)",
+                paddingVertical: 15, alignItems: "center",
+              }}>
+              <Text style={{
+                color: day >= totalDays ? "#ffd700" : C.green,
+                fontFamily: HEADING, fontSize: 18, letterSpacing: 1,
+              }}>
+                {day >= totalDays ? "HARVEST ✦" : "TOMORROW →"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         {/* ── Glassmorphic info trays ─────────────────────────────────────── */}
         {description && (
