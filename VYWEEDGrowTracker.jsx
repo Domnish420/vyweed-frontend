@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   View, Text, ScrollView, TouchableOpacity, TextInput,
   Modal, ActivityIndicator, Alert, RefreshControl,
-  StatusBar, Platform, Animated, Dimensions,
+  StatusBar, Platform, Animated, Dimensions, StyleSheet,
 } from "react-native";
+import Svg, { Defs, RadialGradient, Stop, Rect as SvgRect } from "react-native-svg";
 import NutrientSchedule from "./NutrientSchedule";
 import GrowTimeline from "./GrowTimeline";
 import { cachedFetch, saveToCache, loadFromCache } from "./cache";
@@ -510,6 +511,176 @@ function GrowListScreen({ onSelect, onNew, onCount }) {
   );
 }
 
+// ── Grow Hero ─────────────────────────────────────────────────────────────────
+const STAGE_GLYPH = {
+  Seedling: "🌱", Vegetative: "🌿", "Pre-Flower": "🌸",
+  Flowering: "💐", Harvest: "✂️",
+};
+const STAGE_GLOW = {
+  Seedling: C.blue, Vegetative: C.greenBright,
+  "Pre-Flower": C.amber, Flowering: "#c8733a", Harvest: "#d4a84b",
+};
+const HERO_H = 210;
+
+function GrowHero({ strainName, stage, day, medium, startDate, logCount,
+                    criticalCount, onBack, onCheckin, onNutrients, onTimeline, onPhotos }) {
+  const floatAnim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(floatAnim, { toValue: 1, duration: 3200, useNativeDriver: true }),
+        Animated.timing(floatAnim, { toValue: 0, duration: 3200, useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, []);
+  const floatY = floatAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -12] });
+
+  const glyph    = STAGE_GLYPH[stage] || "🌱";
+  const glowCol  = STAGE_GLOW[stage]  || C.greenBright;
+
+  return (
+    <View style={{ backgroundColor: C.bg }}>
+      {/* Hero canvas */}
+      <View style={{ height: HERO_H }}>
+
+        {/* SVG radial glow */}
+        <Svg style={StyleSheet.absoluteFill} width="100%" height={HERO_H}>
+          <Defs>
+            <RadialGradient id="hg" cx="50%" cy="65%" rx="58%" ry="62%">
+              <Stop offset="0%"   stopColor={glowCol} stopOpacity="0.30" />
+              <Stop offset="50%"  stopColor={glowCol} stopOpacity="0.07" />
+              <Stop offset="100%" stopColor={C.bg}    stopOpacity="0"    />
+            </RadialGradient>
+          </Defs>
+          <SvgRect x={0} y={0} width="100%" height={HERO_H} fill={C.bg} />
+          <SvgRect x={0} y={0} width="100%" height={HERO_H} fill="url(#hg)" />
+        </Svg>
+
+        {/* HUD corner brackets */}
+        {[["top","left"],["top","right"],["bottom","left"],["bottom","right"]].map(([v, h]) => (
+          <View key={v+h} style={{
+            position: "absolute", [v]: 14, [h]: 14, width: 18, height: 18,
+          }}>
+            <View style={{
+              position: "absolute",
+              [v === "top" ? "top" : "bottom"]: 0,
+              left: 0, right: 0, height: 2,
+              backgroundColor: glowCol, opacity: 0.45,
+            }} />
+            <View style={{
+              position: "absolute",
+              [h === "left" ? "left" : "right"]: 0,
+              top: 0, bottom: 0, width: 2,
+              backgroundColor: glowCol, opacity: 0.45,
+            }} />
+          </View>
+        ))}
+
+        {/* Nav bar — back + critical badge + check-in */}
+        <View style={{
+          position: "absolute", top: 0, left: 0, right: 0,
+          paddingTop: Platform.OS === "android" ? 14 : 50,
+          paddingHorizontal: 16,
+          flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+        }}>
+          <TouchableOpacity onPress={onBack} style={{ padding: 4 }}>
+            <Text style={{ color: C.greenBright, fontFamily: HEADING, fontSize: 22 }}>←</Text>
+          </TouchableOpacity>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            {criticalCount > 0 && (
+              <View style={{ backgroundColor: "#1a0808", borderRadius: 4,
+                paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: C.red }}>
+                <Text style={{ color: C.red, fontFamily: HEADING, fontSize: 12, letterSpacing: 1 }}>
+                  ⚠ {criticalCount}
+                </Text>
+              </View>
+            )}
+            <GreenBtn label="CHECK IN" onPress={onCheckin} small />
+          </View>
+        </View>
+
+        {/* Floating stage glyph */}
+        <View style={{ position: "absolute", left: 0, right: 0,
+          alignItems: "center", top: HERO_H * 0.18 }}>
+          <Animated.Text style={{ fontSize: 72, transform: [{ translateY: floatY }] }}>
+            {glyph}
+          </Animated.Text>
+        </View>
+
+        {/* DAY counter — bottom-right */}
+        <View style={{ position: "absolute", bottom: 14, right: 16, alignItems: "flex-end" }}>
+          <Text style={{ color: glowCol, fontFamily: HEADING,
+            fontSize: 60, letterSpacing: 2, lineHeight: 60, opacity: 0.92 }}>
+            {day}
+          </Text>
+          <Text style={{ color: C.greyLight, fontFamily: HEADING,
+            fontSize: 13, letterSpacing: 5, marginTop: -8 }}>
+            DAY
+          </Text>
+        </View>
+      </View>
+
+      {/* Floating name plate — overlaps hero bottom */}
+      <View style={{ marginHorizontal: 16, marginTop: -18, marginBottom: 0,
+        backgroundColor: C.card, borderRadius: 10,
+        borderWidth: 1, borderColor: C.border,
+        paddingHorizontal: 14, paddingVertical: 10,
+        flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+        elevation: 6, shadowColor: "#000", shadowOpacity: 0.4, shadowRadius: 8,
+      }}>
+        <Text style={{ color: C.white, fontFamily: HEADING, fontSize: 22,
+          letterSpacing: 1, flex: 1 }} numberOfLines={1}>
+          {strainName}
+        </Text>
+        <StagePill stage={stage} />
+      </View>
+
+      {/* Meta strip */}
+      <View style={{ paddingHorizontal: 16, paddingVertical: 8,
+        flexDirection: "row", justifyContent: "space-between", alignItems: "center",
+        borderBottomWidth: 1, borderColor: C.border }}>
+        <Text style={{ color: C.greyLight, fontFamily: SANS_MED, fontSize: 11 }}>
+          {medium?.toUpperCase()} · {startDate}
+        </Text>
+        <Text style={{ color: C.grey, fontFamily: SANS_MED, fontSize: 11 }}>
+          {logCount} LOGS
+        </Text>
+      </View>
+
+      {/* Action pills */}
+      <View style={{ flexDirection: "row", gap: 8, paddingHorizontal: 16, paddingVertical: 10,
+        borderBottomWidth: 1, borderColor: C.border }}>
+        <TouchableOpacity onPress={onNutrients} style={{
+          flex: 1, backgroundColor: C.surface, borderRadius: 20,
+          borderWidth: 1, borderColor: C.amber, paddingVertical: 8, alignItems: "center",
+        }}>
+          <Text style={{ color: C.amber, fontFamily: HEADING, fontSize: 12, letterSpacing: 1 }}>
+            🧪 NUTRIENTS
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={onTimeline} style={{
+          flex: 1, backgroundColor: C.surface, borderRadius: 20,
+          borderWidth: 1, borderColor: C.blue, paddingVertical: 8, alignItems: "center",
+        }}>
+          <Text style={{ color: C.blue, fontFamily: HEADING, fontSize: 12, letterSpacing: 1 }}>
+            📈 TIMELINE
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={onPhotos} style={{
+          flex: 1, backgroundColor: C.surface, borderRadius: 20,
+          borderWidth: 1, borderColor: C.purple, paddingVertical: 8, alignItems: "center",
+        }}>
+          <Text style={{ color: C.purple, fontFamily: HEADING, fontSize: 12, letterSpacing: 1 }}>
+            📷 PHOTOS
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
 // ── SCREEN: Grow Detail ───────────────────────────────────────────────────────
 function GrowDetailScreen({ grow, onBack, onCheckin, onNutrients, onTimeline, onPhotos }) {
   const [report, setReport] = useState(null);
@@ -547,82 +718,20 @@ function GrowDetailScreen({ grow, onBack, onCheckin, onNutrients, onTimeline, on
 
   return (
     <View style={styles.screen}>
-      {/* Header — stacked: name row + action row */}
-      <View style={[styles.header, { flexDirection: "column" }]}>
-        <View style={{ flexDirection: "row", alignItems: "center" }}>
-          <TouchableOpacity onPress={onBack} style={{ padding: 4, marginRight: 10 }}>
-            <Text style={{ color: C.greenBright, fontFamily: HEADING, fontSize: 22 }}>←</Text>
-          </TouchableOpacity>
-          <View style={{ flex: 1 }}>
-            <Text style={{ color: C.white, fontFamily: HEADING,
-              fontSize: 24, letterSpacing: 1, lineHeight: 26 }}>
-              {report.strain_name}
-            </Text>
-            <View style={{ flexDirection: "row", gap: 8, marginTop: 4, alignItems: "center" }}>
-              <StagePill stage={r.stage} />
-              {criticalAlerts.length > 0 && (
-                <View style={{
-                  backgroundColor: "#1a0808", borderRadius: 4,
-                  paddingHorizontal: 8, paddingVertical: 3,
-                  borderWidth: 1, borderColor: C.red,
-                }}>
-                  <Text style={{ color: C.red, fontFamily: HEADING, fontSize: 12, letterSpacing: 1 }}>
-                    ⚠ {criticalAlerts.length} CRITICAL
-                  </Text>
-                </View>
-              )}
-            </View>
-          </View>
-          <GreenBtn label="CHECK IN" onPress={() => onCheckin(grow)} small />
-        </View>
-
-        <View style={{ flexDirection: "row", gap: 8, marginTop: 10 }}>
-          <TouchableOpacity onPress={onNutrients} style={{
-            flex: 1, backgroundColor: C.surface, borderRadius: 6,
-            borderWidth: 1, borderColor: C.amber,
-            paddingVertical: 7, alignItems: "center",
-          }}>
-            <Text style={{ color: C.amber, fontFamily: HEADING, fontSize: 12, letterSpacing: 1 }}>
-              🧪 NUTRIENTS
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={onTimeline} style={{
-            flex: 1, backgroundColor: C.surface, borderRadius: 6,
-            borderWidth: 1, borderColor: C.blue,
-            paddingVertical: 7, alignItems: "center",
-          }}>
-            <Text style={{ color: C.blue, fontFamily: HEADING, fontSize: 12, letterSpacing: 1 }}>
-              📈 TIMELINE
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={onPhotos} style={{
-            flex: 1, backgroundColor: C.surface, borderRadius: 6,
-            borderWidth: 1, borderColor: C.purple,
-            paddingVertical: 7, alignItems: "center",
-          }}>
-            <Text style={{ color: C.purple, fontFamily: HEADING, fontSize: 12, letterSpacing: 1 }}>
-              📷 PHOTOS
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* Day counter strip */}
-      <View style={{
-        backgroundColor: C.greenFaint, paddingVertical: 8, paddingHorizontal: 16,
-        flexDirection: "row", justifyContent: "space-between", alignItems: "center",
-        borderBottomWidth: 1, borderColor: C.border,
-      }}>
-        <Text style={{ color: C.greenBright, fontFamily: HEADING, fontSize: 15, letterSpacing: 2 }}>
-          DAY {report.current_day}
-        </Text>
-        <Text style={{ color: C.greyLight, fontFamily: SANS_MED, fontSize: 11 }}>
-          {report.medium?.toUpperCase()} · {report.start_date}
-        </Text>
-        <Text style={{ color: C.grey, fontFamily: SANS_MED, fontSize: 11 }}>
-          {report.env_log_count} LOGS
-        </Text>
-      </View>
+      <GrowHero
+        strainName={report.strain_name}
+        stage={r.stage}
+        day={report.current_day}
+        medium={report.medium}
+        startDate={report.start_date}
+        logCount={report.env_log_count}
+        criticalCount={criticalAlerts.length}
+        onBack={onBack}
+        onCheckin={() => onCheckin(grow)}
+        onNutrients={onNutrients}
+        onTimeline={onTimeline}
+        onPhotos={onPhotos}
+      />
 
       {/* Tab bar */}
       <View style={{ flexDirection: "row", borderBottomWidth: 1, borderColor: C.border }}>
