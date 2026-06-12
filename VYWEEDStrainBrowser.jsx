@@ -31,6 +31,8 @@ import YieldCalculator from "./YieldCalculator";
 import { useAppMode } from "./AppMode";
 
 const { width: SW, height: SH } = Dimensions.get("window");
+const GRID_GAP = 12;
+const CARD_W = (SW - 24 - GRID_GAP) / 2;   // list padding 12*2 + one gap
 
 // ── Config ────────────────────────────────────────────────────────────────────
 import { getApiV1, BACKEND_HEADERS } from "./apiConfig";
@@ -141,30 +143,6 @@ function strainGlyph(strain) {
   if (strain?.type === "indica") return "🪴";
   if (strain?.type === "sativa") return "🌿";
   return "🌱";
-}
-
-// Small gradient thumbnail used in list cards
-function StrainThumb({ colour, size = 60, glyph = "🌿" }) {
-  const id = useGradId();
-  const c = colour || C.green;
-  return (
-    <View style={{ width: size, height: size, borderRadius: 16, overflow: "hidden",
-      borderWidth: 1, borderColor: `${c}55` }}>
-      <Svg width={size} height={size} style={StyleSheet.absoluteFill}>
-        <Defs>
-          <RadialGradient id={id} cx="50%" cy="32%" r="80%">
-            <Stop offset="0" stopColor={c} stopOpacity="0.6" />
-            <Stop offset="0.6" stopColor={c} stopOpacity="0.18" />
-            <Stop offset="1" stopColor={c} stopOpacity="0.04" />
-          </RadialGradient>
-        </Defs>
-        <Rect width={size} height={size} fill={`url(#${id})`} />
-      </Svg>
-      <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-        <Text style={{ fontSize: size * 0.46 }}>{glyph}</Text>
-      </View>
-    </View>
-  );
 }
 
 // Large hero stage for the detail screen — corner HUD brackets + floating glyph.
@@ -859,132 +837,100 @@ function InfoBtn({ onPress }) {
 }
 
 
-// ── Locked Strain Card (virtual mode) ────────────────────────────────────────
+// ── Locked Strain Card (virtual mode) — grid box ─────────────────────────────
 function LockedStrainCard({ strain }) {
   const TIER_METALS = { T1: "💎", T2: "🥇", T3: "🥈", T4: "🥉" };
   const TIER_COLS   = { T1: "#b9f2ff", T2: "#ffd700", T3: "#c0c0c0", T4: "#cd7f32" };
   const col = TIER_COLS[strain.tier] || C.grey;
   return (
-    <View style={{ backgroundColor: C.card, borderRadius: 8,
+    <View style={{ width: CARD_W, backgroundColor: C.card, borderRadius: 16,
       borderWidth: 1, borderColor: C.border,
       borderLeftWidth: 3, borderLeftColor: `${col}44`,
-      padding: 12, marginBottom: 8, opacity: 0.7 }}>
-      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-        <View style={{ flex: 1 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            <Text style={{ color: C.white, fontFamily: MONO, fontSize: 15, fontWeight: "bold" }}>
-              {strain.name}
-            </Text>
-            <View style={{ backgroundColor: `${col}22`, borderRadius: 4,
-              borderWidth: 1, borderColor: `${col}44`, paddingHorizontal: 6, paddingVertical: 2 }}>
-              <Text style={{ color: col, fontFamily: MONO, fontSize: 9 }}>
-                {TIER_METALS[strain.tier]} {strain.tier}
-              </Text>
-            </View>
-          </View>
-          <View style={{ marginTop: 8, gap: 6 }}>
-            <View style={{ backgroundColor: C.border, borderRadius: 3, height: 8, width: "75%" }} />
-            <View style={{ backgroundColor: C.border, borderRadius: 3, height: 8, width: "50%" }} />
-          </View>
+      padding: 13, minHeight: 152, opacity: 0.7, justifyContent: "space-between" }}>
+      <View>
+        <Text style={{ color: C.white, fontFamily: HEADING, fontSize: 19, letterSpacing: 0.5 }}
+          numberOfLines={1}>
+          {strain.name}
+        </Text>
+        <View style={{ alignSelf: "flex-start", backgroundColor: `${col}22`, borderRadius: 4,
+          borderWidth: 1, borderColor: `${col}44`, paddingHorizontal: 6, paddingVertical: 2, marginTop: 7 }}>
+          <Text style={{ color: col, fontFamily: SANS_MED, fontSize: 10 }}>
+            {TIER_METALS[strain.tier]} {strain.tier}
+          </Text>
         </View>
-        <View style={{ alignItems: "center", gap: 4 }}>
-          <Text style={{ fontSize: 20 }}>🔒</Text>
-          <Text style={{ color: C.grey, fontFamily: MONO, fontSize: 8 }}>GROW TO</Text>
-          <Text style={{ color: C.grey, fontFamily: MONO, fontSize: 8 }}>UNLOCK</Text>
+        <View style={{ marginTop: 12, gap: 6 }}>
+          <View style={{ backgroundColor: C.border, borderRadius: 3, height: 8, width: "75%" }} />
+          <View style={{ backgroundColor: C.border, borderRadius: 3, height: 8, width: "50%" }} />
         </View>
+      </View>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 10 }}>
+        <Text style={{ fontSize: 16 }}>🔒</Text>
+        <Text style={{ color: C.grey, fontFamily: HEADING, fontSize: 12, letterSpacing: 1 }}>GROW TO UNLOCK</Text>
       </View>
     </View>
   );
 }
 
+// Compact 2-column grid box — quick info only, no imagery (3D lives in the detail card)
 function StrainCard({ strain, onPress, hasTrophy, compareMode, isInCompare }) {
-  const typeCol  = TYPE_COLOUR[strain.type]  || C.amber;
-  const diffCol  = DIFF_COLOUR[strain.difficulty] || C.amber;
+  const typeCol   = TYPE_COLOUR[strain.type]  || C.amber;
+  const diffCol   = DIFF_COLOUR[strain.difficulty] || C.amber;
   const effectCol = EFFECT_COLOUR[strain.effect] || C.amber;
-  const accent   = strain.colour || typeCol;
-  const flowerLabel = (() => {
-    const min = strain.flower_wk_min, max = strain.flower_wk_max;
-    if (min && max && min !== max) return `🌸 ${min}–${max}wk`;
-    if (max) return `🌸 ${max}wk`;
-    if (min) return `🌸 ${min}wk`;
-    return `🌸 ?wk`;
-  })();
+  const accent    = strain.colour || typeCol;
+  const thcCol    = strain.thc_max >= 25 ? C.red : strain.thc_max >= 20 ? C.amber : C.greenBright;
+  const flowerLabel = strain.flower_wk_max ? `${strain.flower_wk_max}wk` : "—";
 
   return (
-    <TouchableOpacity onPress={onPress} activeOpacity={0.85}>
+    <TouchableOpacity onPress={onPress} activeOpacity={0.85} style={{ width: CARD_W }}>
       <View style={{
         backgroundColor: isInCompare ? `${C.purple}15` : C.card,
-        borderRadius: 18,
+        borderRadius: 16,
         borderWidth: 1,
         borderColor: isInCompare ? C.purple : C.border,
-        padding: 14, marginBottom: 14,
-        shadowColor: "#000", shadowOpacity: 0.3, shadowRadius: 10,
-        shadowOffset: { width: 0, height: 3 }, elevation: 4,
+        borderLeftWidth: 3, borderLeftColor: isInCompare ? C.purple : accent,
+        padding: 13, minHeight: 152,
+        shadowColor: "#000", shadowOpacity: 0.25, shadowRadius: 7,
+        shadowOffset: { width: 0, height: 2 }, elevation: 3,
       }}>
-        {/* Top row: thumbnail · name/lineage/tags · action */}
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
-          <StrainThumb colour={accent} glyph={strainGlyph(strain)} size={64} />
-
-          <View style={{ flex: 1 }}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-              <Text style={{ color: C.white, fontFamily: HEADING, fontSize: 21, flexShrink: 1 }}
-                numberOfLines={1}>
-                {strain.name}
-              </Text>
-              {hasTrophy && <Text style={{ fontSize: 12 }}>🏆</Text>}
-            </View>
-            <Text style={{ color: C.greyLight, fontFamily: SANS, fontSize: 11, marginTop: 1 }}
-              numberOfLines={1}>
-              {strain.lineage || strain.origin || "—"}
-            </Text>
-            <View style={{ flexDirection: "row", gap: 5, marginTop: 6 }}>
-              <Tag label={strain.tier} colour={C.greyLight} />
-              <Tag label={`${TYPE_ICON[strain.type]} ${strain.type}`} colour={typeCol} />
-            </View>
+        {/* Compare checkbox */}
+        {compareMode && (
+          <View style={{ position: "absolute", top: 8, right: 8,
+            width: 22, height: 22, borderRadius: 11,
+            backgroundColor: isInCompare ? C.purple : C.surface,
+            borderWidth: 2, borderColor: isInCompare ? C.purple : C.border,
+            alignItems: "center", justifyContent: "center", zIndex: 2 }}>
+            {isInCompare && <Text style={{ color: C.white, fontSize: 11, fontFamily: SANS_BOLD }}>✓</Text>}
           </View>
-
-          {/* Green action button (echoes the reference cards) / compare check */}
-          {compareMode ? (
-            <View style={{
-              width: 30, height: 30, borderRadius: 15,
-              backgroundColor: isInCompare ? C.purple : C.surface,
-              borderWidth: 2, borderColor: isInCompare ? C.purple : C.border,
-              alignItems: "center", justifyContent: "center",
-            }}>
-              {isInCompare && <Text style={{ color: C.white, fontSize: 13, fontFamily: SANS_BOLD }}>✓</Text>}
-            </View>
-          ) : (
-            <View style={{
-              width: 38, height: 38, borderRadius: 19,
-              backgroundColor: C.green,
-              alignItems: "center", justifyContent: "center",
-              shadowColor: C.greenBright, shadowOpacity: 0.5, shadowRadius: 6, elevation: 3,
-            }}>
-              <Text style={{ color: "#0a0f0a", fontSize: 18, fontFamily: SANS_BOLD, marginTop: -2 }}>›</Text>
-            </View>
-          )}
-        </View>
-
-        {/* THC bar */}
-        <View style={{ flexDirection: "row", alignItems: "center", marginTop: 14, gap: 8 }}>
-          <Label>THC</Label>
-          <THCBar min={strain.thc_min} max={strain.thc_max} />
-        </View>
-
-        {/* Meta tags */}
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 10 }}>
-          <Tag label={`${EFFECT_ICON[strain.effect] || ""} ${strain.effect}`} colour={effectCol} />
-          <Tag label={`${DIFF_ICON[strain.difficulty] || "●"} ${strain.difficulty}`} colour={diffCol} />
-          <Tag label={flowerLabel} colour={C.blue} />
-          <Tag label={`📦 ${strain.yield_max_gm2}g/m²`} colour={C.greyLight} />
-        </View>
-
-        {/* Terpenes */}
-        {strain.terpenes?.length > 0 && (
-          <Text style={{ color: C.greyLight, fontFamily: SANS, fontSize: 10, marginTop: 8 }}>
-            🧪 {strain.terpenes.slice(0, 3).join("  ·  ")}
-          </Text>
         )}
+
+        {/* Name */}
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 5, paddingRight: compareMode ? 24 : 0 }}>
+          <Text style={{ color: C.white, fontFamily: HEADING, fontSize: 19, flexShrink: 1, letterSpacing: 0.5 }}
+            numberOfLines={1}>
+            {strain.name}
+          </Text>
+          {hasTrophy && <Text style={{ fontSize: 11 }}>🏆</Text>}
+        </View>
+
+        {/* Tier + type */}
+        <View style={{ flexDirection: "row", gap: 5, marginTop: 7 }}>
+          <Tag label={strain.tier} colour={C.greyLight} />
+          <Tag label={`${TYPE_ICON[strain.type]} ${strain.type}`} colour={typeCol} />
+        </View>
+
+        {/* THC headline */}
+        <View style={{ marginTop: 12 }}>
+          <Label>THC</Label>
+          <Text style={{ color: thcCol, fontFamily: SANS_BOLD, fontSize: 22, marginTop: 1 }}>
+            {strain.thc_min}–{strain.thc_max}%
+          </Text>
+        </View>
+
+        {/* Quick stats */}
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 5, marginTop: 10 }}>
+          <Tag label={`${EFFECT_ICON[strain.effect] || ""} ${strain.effect}`} colour={effectCol} />
+          <Tag label={`🌸 ${flowerLabel}`} colour={C.blue} />
+        </View>
       </View>
     </TouchableOpacity>
   );
@@ -2304,9 +2250,11 @@ export default function VYWEEDStrainBrowser({ onSelectStrain }) {
         <FlatList
           data={results}
           keyExtractor={(item, index) => `${item.id}-${index}`}
-          contentContainerStyle={{ padding: 12, paddingBottom: 40 }}
+          numColumns={2}
+          columnWrapperStyle={{ gap: 12 }}
+          contentContainerStyle={{ padding: 12, paddingBottom: 40, gap: 12 }}
           ListHeaderComponent={!query && activeFilterCount === 0
-            ? <StatsCard stats={stats} />
+            ? <View style={{ marginBottom: 0 }}><StatsCard stats={stats} /></View>
             : null}
           renderItem={({ item }) => {
             const isInCompare = compareSlots.some(s => s.id === item.id);
