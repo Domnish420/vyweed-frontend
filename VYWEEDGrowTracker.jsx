@@ -1111,9 +1111,9 @@ function CheckinModal({ grow, onClose, onComplete }) {
 }
 
 // ── MODAL: New Grow ───────────────────────────────────────────────────────────
-function NewGrowModal({ onClose, onCreate }) {
-  const [strainId, setStrainId]   = useState("");
-  const [strainName, setStrainName] = useState("");
+function NewGrowModal({ onClose, onCreate, prefillStrain }) {
+  const [strainId, setStrainId]   = useState(prefillStrain?.id   ?? "");
+  const [strainName, setStrainName] = useState(prefillStrain?.name ?? "");
   const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10));
   const [medium, setMedium]       = useState("soil");
   const [suggestions, setSuggestions] = useState([]);
@@ -1300,7 +1300,7 @@ function CheckinResultModal({ result, onClose }) {
 }
 
 // ── Root App ──────────────────────────────────────────────────────────────────
-export default function VYWEEDGrowTracker({ onGrowCountChange }) {
+export default function VYWEEDGrowTracker({ onGrowCountChange, pendingStrain, onPendingStrainConsumed }) {
   const [screen, setScreen]           = useState("list");
   const [selectedGrow, setSelectedGrow] = useState(null);
   const [showNewGrow, setShowNewGrow] = useState(false);
@@ -1313,6 +1313,13 @@ export default function VYWEEDGrowTracker({ onGrowCountChange }) {
     requestNotificationPermissions().catch(() => {});
     scheduleDailyReminder("09:00", 1).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (pendingStrain) {
+      setShowNewGrow(true);
+      onPendingStrainConsumed?.();
+    }
+  }, [pendingStrain]);
 
   const handleSelectGrow = (grow) => {
     setSelectedGrow(grow);
@@ -1380,6 +1387,7 @@ export default function VYWEEDGrowTracker({ onGrowCountChange }) {
 
       {showNewGrow && (
         <NewGrowModal
+          prefillStrain={pendingStrain}
           onClose={() => setShowNewGrow(false)}
           onCreate={(result) => {
             setShowNewGrow(false);

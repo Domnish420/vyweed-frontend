@@ -222,10 +222,10 @@ function AppInner() {
     isIRL ? true : !IRL_ONLY.includes(t.id)
   );
 
-  // When user taps "Start Grow" in strain browser — switch to grows tab
+  // When user taps "Start Grow" in strain browser — pass strain to tracker
+  const [pendingStrain, setPendingStrain] = useState(null);
   const handleSelectStrain = useCallback((strain) => {
-    // In a real app you'd pass strain data through to the tracker
-    // For now just switch tabs — tracker has its own "New Grow" button
+    setPendingStrain({ id: strain.id, name: strain.name });
     setActiveTab("grows");
   }, []);
 
@@ -243,7 +243,11 @@ function AppInner() {
 
         {/* GROW TRACKER */}
         <View style={{ flex: 1, display: activeTab === "grows" ? "flex" : "none" }}>
-          <VYWEEDGrowTracker onGrowCountChange={setGrowCount} />
+          <VYWEEDGrowTracker
+            onGrowCountChange={setGrowCount}
+            pendingStrain={pendingStrain}
+            onPendingStrainConsumed={() => setPendingStrain(null)}
+          />
         </View>
 
         {/* GROW GAME */}
