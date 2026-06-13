@@ -1,10 +1,20 @@
 // PlantRenderer3D.jsx — Three.js cannabis plant via expo-gl
+// Loads textured .glb from GitHub Releases when available; procedural fallback.
 // Requires EAS build (expo-gl is a native module).
 
 import React, { useCallback, useMemo, useRef, useEffect, useState } from "react";
-import { View } from "react-native";
+import { View, ActivityIndicator, StyleSheet } from "react-native";
 import { GLView } from "expo-gl";
 import * as THREE from "three";
+import * as FileSystem from "expo-file-system";
+import useGLBAsset from "./useGLBAsset";
+
+// Try to pull in GLTFLoader — non-fatal if Metro can't resolve it.
+let GLTFLoader = null;
+try {
+  // eslint-disable-next-line import/no-extraneous-dependencies
+  ({ GLTFLoader } = require("three/examples/jsm/loaders/GLTFLoader.js"));
+} catch (_) {}
 
 // ── Seeded RNG ────────────────────────────────────────────────────────────────
 function makeRng(seed) {
@@ -130,7 +140,7 @@ function buildLeafCluster(pos, rot, size, leafMat, veinMat) {
   return group;
 }
 
-// ── Build plant scene ─────────────────────────────────────────────────────────
+// ── Build procedural plant scene ──────────────────────────────────────────────
 function buildPlant(scene, params, rng) {
   const { sp, sh, frost, lean, plantH, spread } = params;
 
@@ -322,8 +332,6 @@ function buildPlant(scene, params, rng) {
 }
 
 // ── Canvas polyfill for Three.js r150+ ───────────────────────────────────────
-// Three.js accesses several DOM properties on the canvas — provide safe stubs
-// so it doesn't throw when they don't exist in the React Native environment.
 function makeCanvasPolyfill(W, H) {
   return {
     width: W, height: H,
@@ -339,6 +347,42 @@ function makeCanvasPolyfill(W, H) {
   };
 }
 
+// ── Load a local .glb into a Three.js scene ───────────────────────────────────
+async function loadGLBIntoScene(localUri, scene, targetHeight = 3.5) {
+  if (!GLTFLoader) throw new Error("GLTFLoader unavailable");
+
+  const b64 = await FileSystem.readAsStringAsync(localUri, {
+    encoding: FileSystem.EncodingType.Base64,
+  });
+
+  // Buffer is a global in React Native (Metro polyfill / Hermes)
+  const buf = Buffer.from(b64, "base64");
+  const arrayBuffer = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
+
+  await new Promise((resolve, reject) => {
+    new GLTFLoader().parse(arrayBuffer, "", (gltf) => {
+      const model = gltf.scene;
+
+      // Centre and scale to fit the scene (same Y origin as procedural pot)
+      const box    = new THREE.Box3().setFromObject(model);
+      const size   = box.getSize(new THREE.Vector3());
+      const center = box.getCenter(new THREE.Vector3());
+      const maxDim = Math.max(size.x, size.y, size.z);
+
+      if (maxDim > 0) {
+        const scale = targetHeight / maxDim;
+        model.scale.setScalar(scale);
+        model.position.x = -center.x * scale;
+        model.position.y = (-center.y + size.y * 0.5) * scale + 0.1;
+        model.position.z = -center.z * scale;
+      }
+
+      scene.add(model);
+      resolve();
+    }, reject);
+  });
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 export default function PlantRenderer3D({
   width      = 300,
@@ -350,6 +394,9 @@ export default function PlantRenderer3D({
   day        = null,
   totalDays  = null,
 }) {
+  // Pull in cached/downloaded GLB for this stage
+  const { localUri, status } = useGLBAsset(stage);
+
   const params = useMemo(() => {
     const rng   = makeRng(strainSeed | 0);
     const sh    = STRAIN_SHAPE[strainType] || STRAIN_SHAPE.H;
@@ -364,11 +411,10 @@ export default function PlantRenderer3D({
     return { sp, sh, frost, lean, plantH, spread, strainSeed };
   }, [stage, strainType, tier, strainSeed, day, totalDays]);
 
-  // When GL init fails, surface the error during render so Plant3DGuard catches it
+  // Surface GL init errors to parent error boundary (Plant3DGuard)
   const [glError, setGlError] = useState(null);
   if (glError) throw glError;
 
-  // Track whether component is still mounted + hold animation canceller
   const mountedRef = useRef(true);
   const cancelRef  = useRef(null);
 
@@ -376,27 +422,29 @@ export default function PlantRenderer3D({
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
-      if (cancelRef.current) {
-        cancelRef.current();
-        cancelRef.current = null;
-      }
+      if (cancelRef.current) { cancelRef.current(); cancelRef.current = null; }
     };
   }, []);
 
-  const onContextCreate = useCallback((gl) => {
-    // Entire GL initialisation wrapped — any Three.js error is caught here.
-    // GLView's onContextCreate is not part of the React render cycle so the
-    // Plant3DGuard error boundary cannot intercept errors from this callback.
+  // Remount GLView when localUri arrives so onContextCreate re-runs with GLB path.
+  // "proc" key = no asset yet; "glb" key = asset ready.
+  const glKey = localUri ? `${stage}-glb` : `${stage}-proc`;
+
+  // Keep a ref so the async onContextCreate always reads the current value
+  // even if state updates happen mid-await.
+  const localUriRef = useRef(localUri);
+  useEffect(() => { localUriRef.current = localUri; }, [localUri]);
+
+  const onContextCreate = useCallback(async (gl) => {
     try {
       const W = gl.drawingBufferWidth;
       const H = gl.drawingBufferHeight;
-
       if (!W || !H) return;
 
       const renderer = new THREE.WebGLRenderer({
         canvas:    makeCanvasPolyfill(W, H),
         context:   gl,
-        antialias: false,   // expo-gl context is already created — don't re-request
+        antialias: false,
         alpha:     true,
         powerPreference: "default",
       });
@@ -428,9 +476,27 @@ export default function PlantRenderer3D({
       discMesh.position.set(0, 0.01, 0);
       scene.add(discMesh);
 
-      const rng = makeRng(params.strainSeed | 0);
-      buildPlant(scene, params, rng);
+      // ── Try GLB first ─────────────────────────────────────────────────────
+      let glbLoaded = false;
+      const uri = localUriRef.current;
 
+      if (uri) {
+        try {
+          await loadGLBIntoScene(uri, scene);
+          if (!mountedRef.current) { try { renderer.dispose(); } catch (_) {} return; }
+          glbLoaded = true;
+        } catch (_) {
+          // GLB failed (e.g. Draco compression, corrupt file) — fall through to procedural
+        }
+      }
+
+      // ── Procedural fallback ───────────────────────────────────────────────
+      if (!glbLoaded) {
+        const rng = makeRng(params.strainSeed | 0);
+        buildPlant(scene, params, rng);
+      }
+
+      // ── Wrap everything in a group for rotation ───────────────────────────
       const plantGroup = new THREE.Group();
       while (scene.children.length) plantGroup.add(scene.children[0]);
       scene.add(plantGroup);
@@ -447,22 +513,36 @@ export default function PlantRenderer3D({
       };
       animate();
 
-      // Store canceller — called by useEffect cleanup on unmount
       cancelRef.current = () => {
         running = false;
         if (frameId != null) cancelAnimationFrame(frameId);
         try { renderer.dispose(); } catch (_) {}
       };
     } catch (err) {
-      // Surface into the render cycle so Plant3DGuard can catch it
-      // and swap to the SVG PlantRenderer fallback
       setGlError(err instanceof Error ? err : new Error(String(err)));
     }
   }, [params]);
 
+  const isDownloading = status === "downloading";
+
   return (
     <View style={{ width, height, overflow: "hidden" }}>
-      <GLView style={{ width, height }} onContextCreate={onContextCreate} />
+      <GLView key={glKey} style={{ width, height }} onContextCreate={onContextCreate} />
+      {isDownloading && (
+        <View style={styles.downloadOverlay}>
+          <ActivityIndicator color="#2d6a4f" size="small" />
+        </View>
+      )}
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  downloadOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "transparent",
+    pointerEvents: "none",
+  },
+});
