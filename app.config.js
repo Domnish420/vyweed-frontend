@@ -22,6 +22,10 @@ export default {
       infoPlist: {
         NSLocationWhenInUseUsageDescription:
           "VYWEED needs your location to show live outdoor growing conditions for your area.",
+        NSCameraUsageDescription:
+          "VYWEED uses your camera to scan plants and capture grow photos.",
+        NSMicrophoneUsageDescription:
+          "VYWEED uses the microphone when recording video scans of your plants.",
       },
     },
 
@@ -53,7 +57,7 @@ export default {
       favicon: './assets/favicon.png',
     },
 
-    plugins: ['expo-notifications', 'expo-image-picker'],
+    plugins: ['expo-notifications', 'expo-image-picker', 'expo-camera'],
 
     extra: {
       appEnv:                    process.env.APP_ENV                    ?? 'development',
