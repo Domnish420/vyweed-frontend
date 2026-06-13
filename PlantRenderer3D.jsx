@@ -90,14 +90,9 @@ function GLBViewer({ width, height, localUri }) {
       const H = gl.drawingBufferHeight;
       if (!W || !H) return;
 
-      // Three.js r163+ checks `gl instanceof WebGL2RenderingContext`.
-      // expo-gl provides a real OpenGL ES 3 context but the browser class
-      // doesn't exist in Hermes — polyfill so Three.js accepts it.
-      if (typeof global.WebGL2RenderingContext === "undefined") {
-        global.WebGL2RenderingContext = gl.constructor;
-      }
-
-      const renderer = new THREE.WebGLRenderer({
+      // three r152 ships WebGL1Renderer which accepts expo-gl's OpenGL ES context
+      const RendererClass = THREE.WebGL1Renderer || THREE.WebGLRenderer;
+      const renderer = new RendererClass({
         canvas: makeCanvasPolyfill(W, H),
         context: gl,
         antialias: false,

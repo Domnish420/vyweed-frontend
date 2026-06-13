@@ -22,7 +22,7 @@
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "4.25.2",
     "react-native-svg": "15.15.4",
-    "three": "^0.168.0"
+    "three": "^0.152.0"
   },
   "devDependencies": {
     "babel-preset-expo": "~56.0.0"
