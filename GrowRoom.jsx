@@ -12,11 +12,11 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { cachedFetch } from "./cache";
 import { setGrowverContext } from "./growverContext";
 import { getApiV1 } from "./apiConfig";
-const API_BASE = { toString: () => getApiV1() };
 import SeedTray from "./SeedTray";
 import PlantRenderer3D from "./PlantRenderer3D";
 import DailyCarePanel from "./DailyCarePanel";
 import TrainingGrow from "./TrainingGrow";
+const API_BASE = { toString: () => getApiV1() };
 
 const { width: SW } = Dimensions.get("window");
 

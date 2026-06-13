@@ -11,8 +11,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { cachedFetch } from "./cache";
 import { setGrowverContext } from "./growverContext";
 import { getApiV1 } from "./apiConfig";
-const API_BASE = { toString: () => getApiV1() };
 import { useAppMode } from "./AppMode";
+const API_BASE = { toString: () => getApiV1() };
 
 const HEADING   = "BebasNeue_400Regular";
 const SANS      = "SpaceGrotesk_400Regular";

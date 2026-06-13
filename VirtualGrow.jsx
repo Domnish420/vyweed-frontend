@@ -27,8 +27,8 @@ import { scheduleWaitTimerNotification } from "./notifications";
 import { setGrowverContext } from "./growverContext";
 import PlantRenderer3D from "./PlantRenderer3D";
 
-const { width: SW } = Dimensions.get("window");
 import { getApiV1 } from "./apiConfig";
+const { width: SW } = Dimensions.get("window");
 const API_BASE = { toString: () => getApiV1() };
 
 const TOTAL_STRAINS = 5042;

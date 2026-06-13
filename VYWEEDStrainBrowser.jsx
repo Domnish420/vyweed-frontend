@@ -17,7 +17,8 @@
 
 import React, {
   useState, useEffect, useCallback, useRef, useMemo,
-} from "react";import {
+} from "react";
+import {
   View, Text, ScrollView, FlatList, TouchableOpacity, TextInput,
   Modal, ActivityIndicator, Animated, Dimensions,
   Platform, StatusBar, Alert, StyleSheet, Easing,
@@ -30,14 +31,12 @@ import StrainComparison from "./StrainComparison";
 import YieldCalculator from "./YieldCalculator";
 import { useAppMode } from "./AppMode";
 import { setGrowverContext } from "./growverContext";
+import { getApiV1, BACKEND_HEADERS } from "./apiConfig";
+import PlantRenderer3D from "./PlantRenderer3D";
 
 const { width: SW, height: SH } = Dimensions.get("window");
 const GRID_GAP = 12;
 const CARD_W = (SW - 24 - GRID_GAP) / 2;   // list padding 12*2 + one gap
-
-// ── Config ────────────────────────────────────────────────────────────────────
-import { getApiV1, BACKEND_HEADERS } from "./apiConfig";
-import PlantRenderer3D from "./PlantRenderer3D";
 const API_BASE = { toString: () => getApiV1() };
 // All `${API_BASE}` usages will now call getApiV1() at interpolation time.
 

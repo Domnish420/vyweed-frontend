@@ -18,8 +18,8 @@ import {
 } from "react-native";
 import Svg, { Line, Polyline, Circle, Rect, Text as SvgText } from "react-native-svg";
 
-const { width: SW } = Dimensions.get("window");
 import { getApiV1, BACKEND_HEADERS } from "./apiConfig";
+const { width: SW } = Dimensions.get("window");
 const API_BASE = { toString: () => getApiV1() };
 
 const C = {

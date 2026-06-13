@@ -7,7 +7,7 @@ import {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as ImagePicker from "expo-image-picker";
 import { CameraView, useCameraPermissions } from "expo-camera";
-import Svg, { Defs, RadialGradient, Stop, Rect as SvgRect, Circle, Rect, ClipPath, Path, G } from "react-native-svg";
+import Svg, { Defs, RadialGradient, Stop, Rect, Circle, ClipPath, Path, G } from "react-native-svg";
 import NutrientSchedule from "./NutrientSchedule";
 import GrowTimeline from "./GrowTimeline";
 import { cachedFetch, saveToCache, loadFromCache } from "./cache";
@@ -19,11 +19,9 @@ import {
   requestNotificationPermissions,
 } from "./notifications";
 
-const { width: SW, height: SH } = Dimensions.get("window");
-
-// ── Config ────────────────────────────────────────────────────────────────────
 import { getApiV1, BACKEND_HEADERS } from "./apiConfig";
 import { setGrowverContext } from "./growverContext";
+const { width: SW, height: SH } = Dimensions.get("window");
 const API_BASE = { toString: () => getApiV1() };
 
 // ── Guided scan steps ─────────────────────────────────────────────────────────
@@ -600,8 +598,8 @@ function GrowHero({ strainName, stage, day, medium, startDate, logCount,
               <Stop offset="100%" stopColor={C.bg}    stopOpacity="0"    />
             </RadialGradient>
           </Defs>
-          <SvgRect x={0} y={0} width="100%" height={HERO_H} fill={C.bg} />
-          <SvgRect x={0} y={0} width="100%" height={HERO_H} fill="url(#hg)" />
+          <Rect x={0} y={0} width="100%" height={HERO_H} fill={C.bg} />
+          <Rect x={0} y={0} width="100%" height={HERO_H} fill="url(#hg)" />
         </Svg>
 
         {/* HUD corner brackets */}
