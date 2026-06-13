@@ -7,11 +7,14 @@ import { GLView } from "expo-gl";
 import * as THREE from "three";
 import * as FileSystem from "expo-file-system/legacy";
 import useGLBAsset from "./useGLBAsset";
+import { RNDRACOLoader } from "./RNDRACOLoader";
 
 let GLTFLoader = null;
 try {
   ({ GLTFLoader } = require("three/examples/jsm/loaders/GLTFLoader.js"));
 } catch (_) {}
+
+const _dracoLoader = new RNDRACOLoader();
 
 function makeCanvasPolyfill(W, H) {
   return {
@@ -32,7 +35,9 @@ async function loadGLBIntoScene(localUri, scene, targetHeight = 3.5) {
   const buf = Buffer.from(b64, "base64");
   const arrayBuffer = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
   await new Promise((resolve, reject) => {
-    new GLTFLoader().parse(arrayBuffer, "", (gltf) => {
+    const loader = new GLTFLoader();
+    loader.setDRACOLoader(_dracoLoader);
+    loader.parse(arrayBuffer, "", (gltf) => {
       const model = gltf.scene;
       const box    = new THREE.Box3().setFromObject(model);
       const size   = box.getSize(new THREE.Vector3());
