@@ -53,7 +53,7 @@ export default {
       favicon: './assets/favicon.png',
     },
 
-    plugins: ['expo-notifications'],
+    plugins: ['expo-notifications', 'expo-image-picker'],
 
     extra: {
       appEnv:                    process.env.APP_ENV                    ?? 'development',

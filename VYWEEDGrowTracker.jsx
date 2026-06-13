@@ -2,8 +2,10 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   View, Text, ScrollView, TouchableOpacity, TextInput,
   Modal, ActivityIndicator, Alert, RefreshControl,
-  StatusBar, Platform, Animated, Dimensions, StyleSheet,
+  StatusBar, Platform, Animated, Dimensions, StyleSheet, Image,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as ImagePicker from "expo-image-picker";
 import Svg, { Defs, RadialGradient, Stop, Rect as SvgRect } from "react-native-svg";
 import NutrientSchedule from "./NutrientSchedule";
 import GrowTimeline from "./GrowTimeline";
@@ -525,7 +527,7 @@ const STAGE_GLOW = {
 const HERO_H = Math.round(SH * 0.35);
 
 function GrowHero({ strainName, stage, day, medium, startDate, logCount,
-                    criticalCount, onBack, onCheckin, onNutrients, onTimeline, onPhotos }) {
+                    criticalCount, onBack, onCheckin, onNutrients, onTimeline, onPhotos, onScan }) {
   const floatAnim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     const loop = Animated.loop(
@@ -681,12 +683,25 @@ function GrowHero({ strainName, stage, day, medium, startDate, logCount,
           </Text>
         </TouchableOpacity>
       </View>
+
+      {/* Scan plant action */}
+      <View style={{ paddingHorizontal: 16, paddingTop: 0, paddingBottom: 10,
+        borderBottomWidth: 1, borderColor: C.border }}>
+        <TouchableOpacity onPress={onScan} style={{
+          backgroundColor: C.surface, borderRadius: 20,
+          borderWidth: 1, borderColor: C.amber, paddingVertical: 8, alignItems: "center",
+        }}>
+          <Text style={{ color: C.amber, fontFamily: HEADING, fontSize: 12, letterSpacing: 1 }}>
+            📸 SCAN PLANT
+          </Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
 
 // ── SCREEN: Grow Detail ───────────────────────────────────────────────────────
-function GrowDetailScreen({ grow, onBack, onCheckin, onNutrients, onTimeline, onPhotos }) {
+function GrowDetailScreen({ grow, onBack, onCheckin, onNutrients, onTimeline, onPhotos, onScan }) {
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("today");
@@ -758,6 +773,7 @@ function GrowDetailScreen({ grow, onBack, onCheckin, onNutrients, onTimeline, on
         onNutrients={onNutrients}
         onTimeline={onTimeline}
         onPhotos={onPhotos}
+        onScan={onScan}
       />
 
       {/* Tab bar */}
@@ -1299,6 +1315,489 @@ function CheckinResultModal({ result, onClose }) {
   );
 }
 
+// ── MODAL: Plant Scan (Growver AI Vision) ────────────────────────────────────
+//
+// Backend API contract:
+//   POST /api/v1/vision/analyze-plant
+//   Content-Type: multipart/form-data
+//   Body fields:
+//     image    — (file) JPEG photo of the plant
+//     grow_id  — (string, optional) ID of the grow being scanned
+//
+//   Response 200:
+//   {
+//     stage:        string,    // e.g. "Mid Flower"
+//     health_pct:   number,    // 0–100
+//     deficiencies: string[],  // e.g. ["nitrogen", "calcium"] or []
+//     issues:       string[],  // e.g. ["slight overwatering"] or []
+//     notes:        string,    // Growver one-liner observation
+//     confidence:   number     // 0–1
+//   }
+
+function PlantScanModal({ visible, growId, onClose, onApply }) {
+  const [photo,   setPhoto]   = useState(null);   // { uri, width, height }
+  const [loading, setLoading] = useState(false);
+  const [result,  setResult]  = useState(null);   // analysis JSON from backend
+
+  // Reset state whenever the modal opens fresh
+  useEffect(() => {
+    if (visible) {
+      setPhoto(null);
+      setLoading(false);
+      setResult(null);
+    }
+  }, [visible]);
+
+  // Pulsing animation for the loading overlay
+  const pulseAnim = useRef(new Animated.Value(0.4)).current;
+  useEffect(() => {
+    if (!loading) return;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, { toValue: 1.0, duration: 700, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 0.4, duration: 700, useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [loading]);
+
+  // Slide-up animation for the results card
+  const slideAnim = useRef(new Animated.Value(80)).current;
+  const fadeAnim  = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (!result) return;
+    slideAnim.setValue(80);
+    fadeAnim.setValue(0);
+    Animated.parallel([
+      Animated.timing(slideAnim, { toValue: 0,   duration: 380, useNativeDriver: true }),
+      Animated.timing(fadeAnim,  { toValue: 1.0, duration: 350, useNativeDriver: true }),
+    ]).start();
+  }, [result]);
+
+  async function pickFromCamera() {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert("Camera access required", "Allow camera access in your device settings.");
+      return;
+    }
+    const res = await ImagePicker.launchCameraAsync({
+      mediaTypes: ["images"],
+      quality: 0.75,
+      allowsEditing: true,
+      aspect: [3, 4],
+    });
+    if (!res.canceled && res.assets?.[0]) {
+      handlePhoto(res.assets[0]);
+    }
+  }
+
+  async function pickFromGallery() {
+    const res = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      quality: 0.75,
+      allowsEditing: true,
+      aspect: [3, 4],
+    });
+    if (!res.canceled && res.assets?.[0]) {
+      handlePhoto(res.assets[0]);
+    }
+  }
+
+  async function handlePhoto(asset) {
+    setPhoto(asset);
+    setLoading(true);
+    try {
+      const formData = new FormData();
+      formData.append("image", {
+        uri:  asset.uri,
+        type: "image/jpeg",
+        name: "plant_scan.jpg",
+      });
+      if (growId) formData.append("grow_id", growId);
+
+      // NOTE: Do NOT set Content-Type manually — fetch sets the multipart boundary
+      const res = await fetch(`${getApiV1()}/vision/analyze-plant`, {
+        method:  "POST",
+        headers: { ...BACKEND_HEADERS },
+        body:    formData,
+      });
+      if (!res.ok) throw new Error(`${res.status}`);
+      const data = await res.json();
+      setResult(data);
+    } catch (e) {
+      Alert.alert("Analysis failed", e.message || "Could not reach Growver. Check your connection.");
+      setPhoto(null);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function apply() {
+    if (!result || !growId) return;
+    try {
+      const key = `scan:${growId}:${Date.now()}`;
+      await AsyncStorage.setItem(key, JSON.stringify({
+        ...result,
+        photo_uri:  photo?.uri,
+        scanned_at: new Date().toISOString(),
+      }));
+      onApply(result);
+    } catch {}
+    onClose();
+  }
+
+  // ── Stage colour helper ──────────────────────────────────────────────────────
+  function stageColour(stage) {
+    if (!stage) return C.greyLight;
+    const s = stage.toLowerCase();
+    if (s.includes("seed"))    return C.blue;
+    if (s.includes("veg"))     return C.greenBright;
+    if (s.includes("pre"))     return C.amber;
+    if (s.includes("flower"))  return "#c8733a";
+    if (s.includes("harvest")) return "#d4a84b";
+    return C.greyLight;
+  }
+
+  // ── Health bar colour ────────────────────────────────────────────────────────
+  function healthColour(pct) {
+    if (pct >= 75) return C.greenBright;
+    if (pct >= 50) return C.amber;
+    return C.red;
+  }
+
+  // ── Stage glyph ──────────────────────────────────────────────────────────────
+  function stageGlyph(stage) {
+    if (!stage) return "🌱";
+    const s = stage.toLowerCase();
+    if (s.includes("seed"))    return "🌱";
+    if (s.includes("veg"))     return "🌿";
+    if (s.includes("pre"))     return "🌸";
+    if (s.includes("flower"))  return "💐";
+    if (s.includes("harvest")) return "✂️";
+    return "🌱";
+  }
+
+  const photoH = Math.round(SH * 0.42);
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent={false} onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: C.bg }}>
+
+        {/* ── PHASE 1: Source picker (no photo yet) ─────────────────────── */}
+        {!photo && !loading && !result && (
+          <View style={{ flex: 1, justifyContent: "flex-end" }}>
+            {/* Dark backdrop tap area to dismiss */}
+            <TouchableOpacity
+              style={{ flex: 1 }}
+              activeOpacity={1}
+              onPress={onClose}
+            >
+              <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.6)" }} />
+            </TouchableOpacity>
+
+            <View style={{
+              backgroundColor: C.card,
+              borderTopLeftRadius: 24, borderTopRightRadius: 24,
+              borderTopWidth: 1, borderColor: C.border,
+              paddingHorizontal: 24, paddingTop: 16, paddingBottom: 48,
+            }}>
+              {/* Drag handle */}
+              <View style={{ alignItems: "center", marginBottom: 20 }}>
+                <View style={{ width: 36, height: 4, backgroundColor: C.border, borderRadius: 2 }} />
+              </View>
+
+              {/* Header */}
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 6 }}>
+                <Text style={{ fontSize: 28 }}>📸</Text>
+                <View>
+                  <Text style={{ color: C.white, fontFamily: HEADING, fontSize: 26, letterSpacing: 2 }}>
+                    SCAN YOUR PLANT
+                  </Text>
+                  <Text style={{ color: C.greyLight, fontFamily: SANS_MED, fontSize: 12 }}>
+                    Growver will analyse stage, health and deficiencies
+                  </Text>
+                </View>
+              </View>
+
+              {/* Divider */}
+              <View style={{ height: 1, backgroundColor: C.border, marginVertical: 20 }} />
+
+              {/* Camera button */}
+              <TouchableOpacity
+                onPress={pickFromCamera}
+                activeOpacity={0.75}
+                style={{
+                  flexDirection: "row", alignItems: "center", gap: 14,
+                  backgroundColor: C.surface, borderRadius: 14,
+                  borderWidth: 1, borderColor: C.green,
+                  paddingVertical: 16, paddingHorizontal: 20, marginBottom: 12,
+                }}
+              >
+                <Text style={{ fontSize: 24 }}>📷</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: C.greenBright, fontFamily: HEADING, fontSize: 18, letterSpacing: 1.5 }}>
+                    OPEN CAMERA
+                  </Text>
+                  <Text style={{ color: C.grey, fontFamily: SANS_MED, fontSize: 11 }}>
+                    Take a fresh photo right now
+                  </Text>
+                </View>
+                <Text style={{ color: C.greenDim, fontFamily: HEADING, fontSize: 18 }}>›</Text>
+              </TouchableOpacity>
+
+              {/* Gallery button */}
+              <TouchableOpacity
+                onPress={pickFromGallery}
+                activeOpacity={0.75}
+                style={{
+                  flexDirection: "row", alignItems: "center", gap: 14,
+                  backgroundColor: C.surface, borderRadius: 14,
+                  borderWidth: 1, borderColor: C.border,
+                  paddingVertical: 16, paddingHorizontal: 20, marginBottom: 24,
+                }}
+              >
+                <Text style={{ fontSize: 24 }}>🖼</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: C.white, fontFamily: HEADING, fontSize: 18, letterSpacing: 1.5 }}>
+                    CHOOSE FROM GALLERY
+                  </Text>
+                  <Text style={{ color: C.grey, fontFamily: SANS_MED, fontSize: 11 }}>
+                    Pick an existing photo
+                  </Text>
+                </View>
+                <Text style={{ color: C.grey, fontFamily: HEADING, fontSize: 18 }}>›</Text>
+              </TouchableOpacity>
+
+              {/* Cancel */}
+              <TouchableOpacity onPress={onClose} activeOpacity={0.7} style={{ alignItems: "center", paddingVertical: 10 }}>
+                <Text style={{ color: C.grey, fontFamily: HEADING, fontSize: 15, letterSpacing: 2 }}>
+                  CANCEL
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {/* ── PHASE 2: Photo + pulsing loading overlay ──────────────────── */}
+        {photo && (loading || (!loading && !result)) && (
+          <View style={{ flex: 1 }}>
+            {/* Photo fills most of the screen */}
+            <Image
+              source={{ uri: photo.uri }}
+              style={{ width: "100%", height: photoH, resizeMode: "cover" }}
+            />
+
+            {/* Loading overlay */}
+            {loading && (
+              <View style={{
+                position: "absolute", top: 0, left: 0, right: 0, height: photoH,
+                backgroundColor: "rgba(0,0,0,0.55)",
+                alignItems: "center", justifyContent: "center",
+              }}>
+                <Animated.View style={{ opacity: pulseAnim, alignItems: "center", gap: 12 }}>
+                  <View style={{
+                    width: 18, height: 18, borderRadius: 9,
+                    backgroundColor: C.greenBright,
+                    shadowColor: C.greenBright, shadowRadius: 12, shadowOpacity: 0.9,
+                    elevation: 8,
+                  }} />
+                  <Text style={{
+                    color: C.greenBright, fontFamily: HEADING,
+                    fontSize: 18, letterSpacing: 3, textAlign: "center",
+                  }}>
+                    GROWVER IS ANALYSING{"\n"}YOUR PLANT...
+                  </Text>
+                </Animated.View>
+              </View>
+            )}
+
+            {/* Cancel strip below photo */}
+            {loading && (
+              <View style={{ flex: 1, backgroundColor: C.bg, alignItems: "center", justifyContent: "center" }}>
+                <TouchableOpacity onPress={onClose} activeOpacity={0.7} style={{ padding: 12 }}>
+                  <Text style={{ color: C.grey, fontFamily: HEADING, fontSize: 14, letterSpacing: 2 }}>
+                    CANCEL
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* ── PHASE 3: Results card ─────────────────────────────────────── */}
+        {photo && result && !loading && (
+          <ScrollView contentContainerStyle={{ paddingBottom: 40 }} bounces={false}>
+            {/* Photo at half height */}
+            <Image
+              source={{ uri: photo.uri }}
+              style={{ width: "100%", aspectRatio: 3 / 4, resizeMode: "cover", maxHeight: photoH }}
+            />
+
+            {/* Results card slides up over photo */}
+            <Animated.View style={{
+              backgroundColor: C.card,
+              borderRadius: 20,
+              borderWidth: 1, borderColor: C.border,
+              padding: 20,
+              marginTop: -24,
+              marginHorizontal: 0,
+              transform: [{ translateY: slideAnim }],
+              opacity: fadeAnim,
+            }}>
+
+              {/* Stage pill */}
+              {result.stage && (() => {
+                const col = stageColour(result.stage);
+                return (
+                  <View style={{
+                    flexDirection: "row", alignItems: "center",
+                    gap: 8, marginBottom: 16,
+                  }}>
+                    <View style={{
+                      backgroundColor: `${col}22`,
+                      borderRadius: 20, paddingHorizontal: 14, paddingVertical: 6,
+                      borderWidth: 1, borderColor: `${col}80`,
+                      flexDirection: "row", alignItems: "center", gap: 6,
+                    }}>
+                      <Text style={{ fontSize: 16 }}>{stageGlyph(result.stage)}</Text>
+                      <Text style={{ color: col, fontFamily: HEADING, fontSize: 18, letterSpacing: 2 }}>
+                        {result.stage.toUpperCase()}
+                      </Text>
+                    </View>
+                    <Text style={{ color: C.greyLight, fontFamily: SANS_MED, fontSize: 11 }}>
+                      DETECTED STAGE
+                    </Text>
+                  </View>
+                );
+              })()}
+
+              {/* Health bar */}
+              {result.health_pct != null && (() => {
+                const pct = Math.max(0, Math.min(100, result.health_pct));
+                const col = healthColour(pct);
+                return (
+                  <View style={{ marginBottom: 16 }}>
+                    <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 6 }}>
+                      <Text style={{ color: C.greyLight, fontFamily: HEADING, fontSize: 12, letterSpacing: 2 }}>
+                        PLANT HEALTH
+                      </Text>
+                      <Text style={{ color: col, fontFamily: HEADING, fontSize: 18, letterSpacing: 1 }}>
+                        {pct}%
+                      </Text>
+                    </View>
+                    <View style={{ height: 8, backgroundColor: C.border, borderRadius: 4, overflow: "hidden" }}>
+                      <View style={{
+                        height: 8, borderRadius: 4,
+                        backgroundColor: col,
+                        width: `${pct}%`,
+                      }} />
+                    </View>
+                  </View>
+                );
+              })()}
+
+              {/* Deficiencies */}
+              <View style={{ marginBottom: 16 }}>
+                <Text style={{ color: C.greyLight, fontFamily: HEADING, fontSize: 12,
+                  letterSpacing: 2, marginBottom: 8 }}>DEFICIENCIES</Text>
+                {(!result.deficiencies || result.deficiencies.length === 0) ? (
+                  <Text style={{ color: C.greenBright, fontFamily: SANS_MED, fontSize: 13 }}>
+                    None detected ✓
+                  </Text>
+                ) : (
+                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+                    {result.deficiencies.map((d, i) => (
+                      <View key={i} style={{
+                        backgroundColor: "#1a0808", borderRadius: 6,
+                        paddingHorizontal: 10, paddingVertical: 4,
+                        borderWidth: 1, borderColor: C.red,
+                      }}>
+                        <Text style={{ color: C.red, fontFamily: SANS_MED, fontSize: 12 }}>
+                          {d}
+                        </Text>
+                      </View>
+                    ))}
+                    {(result.issues || []).map((iss, i) => (
+                      <View key={`iss-${i}`} style={{
+                        backgroundColor: "#1a1008", borderRadius: 6,
+                        paddingHorizontal: 10, paddingVertical: 4,
+                        borderWidth: 1, borderColor: C.amber,
+                      }}>
+                        <Text style={{ color: C.amber, fontFamily: SANS_MED, fontSize: 12 }}>
+                          {iss}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </View>
+
+              {/* Growver one-liner observation */}
+              {result.notes && (
+                <View style={{
+                  backgroundColor: "#1a150a", borderRadius: 10,
+                  borderWidth: 1, borderColor: `${C.amber}60`,
+                  padding: 14, marginBottom: 16,
+                }}>
+                  <Text style={{ color: C.greyLight, fontFamily: HEADING, fontSize: 11,
+                    letterSpacing: 2, marginBottom: 6 }}>GROWVER SAYS</Text>
+                  <Text style={{
+                    color: C.amber, fontFamily: SANS,
+                    fontSize: 13, lineHeight: 20, fontStyle: "italic",
+                  }}>
+                    "{result.notes}"
+                  </Text>
+                </View>
+              )}
+
+              {/* Confidence */}
+              {result.confidence != null && (
+                <Text style={{
+                  color: C.grey, fontFamily: SANS_MED, fontSize: 11,
+                  marginBottom: 20,
+                }}>
+                  Confidence: {Math.round(result.confidence * 100)}%
+                </Text>
+              )}
+
+              {/* Divider */}
+              <View style={{ height: 1, backgroundColor: C.border, marginBottom: 16 }} />
+
+              {/* Action buttons */}
+              <TouchableOpacity
+                onPress={apply}
+                activeOpacity={0.75}
+                style={{
+                  backgroundColor: C.greenFaint, borderRadius: 10,
+                  borderWidth: 1, borderColor: C.green,
+                  paddingVertical: 14, alignItems: "center", marginBottom: 10,
+                }}
+              >
+                <Text style={{ color: C.greenBright, fontFamily: HEADING, fontSize: 18, letterSpacing: 2 }}>
+                  ✓ APPLY TO GROW
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={onClose}
+                activeOpacity={0.7}
+                style={{ alignItems: "center", paddingVertical: 12 }}
+              >
+                <Text style={{ color: C.grey, fontFamily: HEADING, fontSize: 15, letterSpacing: 2 }}>
+                  DISMISS
+                </Text>
+              </TouchableOpacity>
+
+            </Animated.View>
+          </ScrollView>
+        )}
+
+      </View>
+    </Modal>
+  );
+}
+
 // ── Root App ──────────────────────────────────────────────────────────────────
 export default function VYWEEDGrowTracker({ onGrowCountChange, pendingStrain, onPendingStrainConsumed }) {
   const [screen, setScreen]           = useState("list");
@@ -1308,6 +1807,10 @@ export default function VYWEEDGrowTracker({ onGrowCountChange, pendingStrain, on
   const [checkinTarget, setCheckinTarget] = useState(null);
   const [checkinResult, setCheckinResult] = useState(null);
   const [listKey, setListKey]         = useState(0);
+
+  // Plant scan state
+  const [showScan,   setShowScan]   = useState(false);
+  const [scanGrowId, setScanGrowId] = useState(null);
 
   useEffect(() => {
     requestNotificationPermissions().catch(() => {});
@@ -1356,6 +1859,7 @@ export default function VYWEEDGrowTracker({ onGrowCountChange, pendingStrain, on
           onNutrients={() => setScreen("nutrients")}
           onTimeline={() => setScreen("timeline")}
           onPhotos={() => setScreen("photos")}
+          onScan={() => { setScanGrowId(selectedGrow.grow_id); setShowScan(true); }}
         />
       )}
 
@@ -1409,6 +1913,19 @@ export default function VYWEEDGrowTracker({ onGrowCountChange, pendingStrain, on
         <CheckinResultModal
           result={checkinResult}
           onClose={() => setCheckinResult(null)}
+        />
+      )}
+
+      {showScan && (
+        <PlantScanModal
+          visible={showScan}
+          growId={scanGrowId}
+          onClose={() => { setShowScan(false); setScanGrowId(null); }}
+          onApply={(result) => {
+            // Optional: could auto-update the grow's stage here in future
+            setShowScan(false);
+            setScanGrowId(null);
+          }}
         />
       )}
     </View>
