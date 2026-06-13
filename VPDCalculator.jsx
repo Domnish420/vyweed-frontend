@@ -326,9 +326,9 @@ function VPDGauge({ vpd, stage }) {
         overflow: "hidden", position: "relative" }}>
         <View style={{ position: "absolute", left: `${loPos}%`, width: `${hiPos - loPos}%`,
           height: 12, backgroundColor: `${C.green}33`,
-          borderLeftWidth: 2, borderRightWidth: 2, borderColor: C.greenDim }} 
+          borderLeftWidth: 2, borderRightWidth: 2, borderColor: C.greenDim }} />
         <View style={{ width: `${pct}%`, height: 12,
-          backgroundColor: colour, borderRadius: 6, opacity: 0.85 }} 
+          backgroundColor: colour, borderRadius: 6, opacity: 0.85 }} />
       </View>
       <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 4 }}>
         <Text style={{ color: C.grey, fontFamily: MONO, fontSize: 9 }}>0</Text>
