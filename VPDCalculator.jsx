@@ -12,7 +12,7 @@ import {
   View, Text, ScrollView, TouchableOpacity,
   Platform, Dimensions, Modal,
 } from "react-native";
-import PlantRenderer from "./PlantRenderer";
+import PlantRenderer3D from "./PlantRenderer3D";
 
 const { width: SW } = Dimensions.get("window");
 
@@ -326,9 +326,9 @@ function VPDGauge({ vpd, stage }) {
         overflow: "hidden", position: "relative" }}>
         <View style={{ position: "absolute", left: `${loPos}%`, width: `${hiPos - loPos}%`,
           height: 12, backgroundColor: `${C.green}33`,
-          borderLeftWidth: 2, borderRightWidth: 2, borderColor: C.greenDim }} />
+          borderLeftWidth: 2, borderRightWidth: 2, borderColor: C.greenDim }} 
         <View style={{ width: `${pct}%`, height: 12,
-          backgroundColor: colour, borderRadius: 6, opacity: 0.85 }} />
+          backgroundColor: colour, borderRadius: 6, opacity: 0.85 }} 
       </View>
       <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 4 }}>
         <Text style={{ color: C.grey, fontFamily: MONO, fontSize: 9 }}>0</Text>
@@ -362,7 +362,7 @@ function VPDInfoModal({ visible, onClose }) {
         <View style={{ backgroundColor: C.card, borderTopLeftRadius: 20,
           borderTopRightRadius: 20, borderTopWidth: 2, borderColor: C.green, maxHeight: "90%" }}>
           <View style={{ alignItems: "center", paddingTop: 10, paddingBottom: 4 }}>
-            <View style={{ width: 40, height: 4, backgroundColor: C.border, borderRadius: 2 }} />
+            <View style={{ width: 40, height: 4, backgroundColor: C.border, borderRadius: 2 }} 
           </View>
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between",
             paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: 1, borderColor: C.border }}>
@@ -540,7 +540,7 @@ export default function VPDCalculator() {
           </Text>
           <Label>VPD CALCULATOR</Label>
         </View>
-        <InfoBtn onPress={() => setShowInfo(true)} />
+        <InfoBtn onPress={() => setShowInfo(true)} 
       </View>
 
       {/* Stage selector */}
@@ -598,16 +598,16 @@ export default function VPDCalculator() {
               fontSize: 12, fontWeight: "bold", letterSpacing: 1 }}>
               kPa — {statusLabel}
             </Text>
-            <VPDGauge vpd={vpd} stage={stage} />
+            <VPDGauge vpd={vpd} stage={stage} 
             <Text style={{ color: C.grey, fontFamily: MONO, fontSize: 10, marginTop: 4 }}>
               TARGET {target.lo}–{target.hi} kPa (IDEAL {target.ideal})
             </Text>
           </View>
 
           <NumInput label="AIR TEMPERATURE" value={temp}
-            onChange={setTemp} unit="°C" min={10} max={40} step={0.5} />
+            onChange={setTemp} unit="°C" min={10} max={40} step={0.5} 
           <NumInput label="RELATIVE HUMIDITY" value={rh}
-            onChange={setRh} unit="%" min={10} max={100} step={1} />
+            onChange={setRh} unit="%" min={10} max={100} step={1} 
 
           {adjustmentTip && (
             <View style={{ backgroundColor: `${colour}15`, borderRadius: 6,
@@ -729,9 +729,9 @@ export default function VPDCalculator() {
               {/* ── Baseline conditions ── */}
               <Label style={{ marginBottom: 10 }}>BASELINE CONDITIONS</Label>
               <NumInput label="BASELINE TEMP" value={temp}
-                onChange={setTemp} unit="°C" min={10} max={40} step={0.5} />
+                onChange={setTemp} unit="°C" min={10} max={40} step={0.5} 
               <NumInput label="BASELINE RH" value={rh}
-                onChange={setRh} unit="%" min={10} max={100} step={1} />
+                onChange={setRh} unit="%" min={10} max={100} step={1} 
 
               {/* Stage hazard grid */}
               <Label style={{ marginBottom: 10 }}>ASSIGN HAZARDS TO STAGES</Label>
@@ -811,7 +811,7 @@ export default function VPDCalculator() {
                   }} style={{ flexDirection: "row", alignItems: "center",
                     paddingVertical: 10, borderBottomWidth: 1, borderColor: C.border, gap: 10 }}>
                     <View style={{ width: 10, height: 10, borderRadius: 5,
-                      backgroundColor: C.grey }} />
+                      backgroundColor: C.grey }} 
                     <Text style={{ color: C.greyLight, fontFamily: MONO, fontSize: 12 }}>
                       NONE — no hazard
                     </Text>
@@ -823,7 +823,7 @@ export default function VPDCalculator() {
                     }} style={{ flexDirection: "row", alignItems: "center",
                       paddingVertical: 10, borderBottomWidth: 1, borderColor: C.border, gap: 10 }}>
                       <View style={{ width: 10, height: 10, borderRadius: 5,
-                        backgroundColor: severityColor(haz.severity) }} />
+                        backgroundColor: severityColor(haz.severity) }} 
                       <Text style={{ fontSize: 16 }}>{haz.icon}</Text>
                       <Text style={{ flex: 1, color: C.white, fontFamily: MONO, fontSize: 12 }}>
                         {haz.name}
@@ -843,7 +843,7 @@ export default function VPDCalculator() {
                       style={{ flexDirection: "row", alignItems: "center",
                         paddingVertical: 12, gap: 10, marginTop: 4 }}>
                       <View style={{ width: 10, height: 10, borderRadius: 5,
-                        backgroundColor: C.amber }} />
+                        backgroundColor: C.amber }} 
                       <Text style={{ color: C.amber, fontFamily: MONO, fontSize: 12 }}>
                         + DEFINE CUSTOM HAZARD
                       </Text>
@@ -877,9 +877,9 @@ export default function VPDCalculator() {
                     >{cName || "e.g. BALLAST OVERHEATED"}</Text>
                   </View>
                   <NumInput label="HAZARD TEMP" value={cTemp}
-                    onChange={setCTemp} unit="°C" min={10} max={45} step={1} />
+                    onChange={setCTemp} unit="°C" min={10} max={45} step={1} 
                   <NumInput label="HAZARD RH" value={cRh}
-                    onChange={setCRh} unit="%" min={10} max={99} step={1} />
+                    onChange={setCRh} unit="%" min={10} max={99} step={1} 
                   <View style={{ flexDirection: "row", gap: 8, marginTop: 4 }}>
                     <TouchableOpacity onPress={() => {
                       if (!cName.trim()) return;
@@ -986,7 +986,7 @@ export default function VPDCalculator() {
                 <View style={{ height: 4, backgroundColor: C.surface,
                   borderRadius: 2, overflow: "hidden", marginBottom: 16 }}>
                   <View style={{ width: `${progressPct}%`, height: 4,
-                    backgroundColor: C.greenDim, borderRadius: 2 }} />
+                    backgroundColor: C.greenDim, borderRadius: 2 }} 
                 </View>
 
                 {/* Plant visual */}
@@ -1001,7 +1001,7 @@ export default function VPDCalculator() {
                     strainType="H"
                     tier="T2"
                     strainSeed={42}
-                  />
+                  
                 </View>
 
                 {/* Health readout */}
@@ -1010,7 +1010,7 @@ export default function VPDCalculator() {
                   <View style={{ height: 10, backgroundColor: C.surface,
                     borderRadius: 5, overflow: "hidden", marginBottom: 6 }}>
                     <View style={{ width: `${healthPct}%`, height: 10,
-                      backgroundColor: hc, borderRadius: 5 }} />
+                      backgroundColor: hc, borderRadius: 5 }} 
                   </View>
                   <Text style={{ fontFamily: MONO, fontSize: 13,
                     fontWeight: "bold", color: hc }}>
@@ -1177,7 +1177,7 @@ export default function VPDCalculator() {
                     strainType="H"
                     tier="T2"
                     strainSeed={42}
-                  />
+                  
                 </View>
 
                 {/* Final health + grade */}
@@ -1209,7 +1209,7 @@ export default function VPDCalculator() {
                       <View style={{ flex: 1, height: 7, backgroundColor: C.surface,
                         borderRadius: 4, overflow: "hidden" }}>
                         <View style={{ width: `${ehPct}%`, height: 7,
-                          backgroundColor: ehc, borderRadius: 4 }} />
+                          backgroundColor: ehc, borderRadius: 4 }} 
                       </View>
                       <Text style={{ fontFamily: MONO, fontSize: 11,
                         color: ehc, width: 36, textAlign: "right" }}>
@@ -1284,7 +1284,7 @@ export default function VPDCalculator() {
         </ScrollView>
       )}
 
-      <VPDInfoModal visible={showInfo} onClose={() => setShowInfo(false)} />
+      <VPDInfoModal visible={showInfo} onClose={() => setShowInfo(false)} 
     </View>
   );
 }

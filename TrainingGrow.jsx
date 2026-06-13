@@ -11,7 +11,7 @@ import {
   Dimensions,
   SafeAreaView,
 } from "react-native";
-import PlantRenderer from "./PlantRenderer";
+import PlantRenderer3D from "./PlantRenderer3D";
 import { STAGE_CARE_TASKS } from "./DailyCarePanel";
 
 const { width: SW } = Dimensions.get("window");
@@ -322,7 +322,7 @@ export default function TrainingGrow({ onComplete, mode = "outdoor" }) {
           {/* Speed options */}
           <Text style={s.selectSpeedLabel}>SELECT YOUR PACE</Text>
           {SPEED_OPTIONS.map((opt) => (
-            <SpeedButton key={opt.key} option={opt} onPress={handleSpeedSelect} />
+            <SpeedButton key={opt.key} option={opt} onPress={handleSpeedSelect} 
           ))}
         </ScrollView>
       </SafeAreaView>
@@ -359,7 +359,7 @@ export default function TrainingGrow({ onComplete, mode = "outdoor" }) {
 
           {/* Progress bar */}
           <View style={s.progressTrack}>
-            <View style={[s.progressFill, { width: `${progressPct}%` }]} />
+            <View style={[s.progressFill, { width: `${progressPct}%` }]} 
           </View>
 
           {/* Plant renderer */}
@@ -373,7 +373,7 @@ export default function TrainingGrow({ onComplete, mode = "outdoor" }) {
               strainSeed={9999}
               day={currentStageDef.day}
               totalDays={currentStageDef.totalDays}
-            />
+            
           </View>
 
           {/* Stage badge */}
@@ -404,7 +404,7 @@ export default function TrainingGrow({ onComplete, mode = "outdoor" }) {
                   activeOpacity={0.7}
                   style={s.careTaskRow}
                 >
-                  <ReadonlyCheckbox checked={isChecked} />
+                  <ReadonlyCheckbox checked={isChecked} 
                   <Text
                     style={[
                       s.careTaskLabel,
@@ -459,7 +459,7 @@ export default function TrainingGrow({ onComplete, mode = "outdoor" }) {
             strainSeed={9999}
             day={91}
             totalDays={91}
-          />
+          
         </View>
 
         {/* Full grow log */}
@@ -474,7 +474,7 @@ export default function TrainingGrow({ onComplete, mode = "outdoor" }) {
               ""
             }
             index={i}
-          />
+          
         ))}
 
         {/* Key learnings */}

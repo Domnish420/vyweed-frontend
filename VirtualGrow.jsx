@@ -25,7 +25,7 @@ import { cachedFetch } from "./cache";
 import { useAppMode } from "./AppMode";
 import { scheduleWaitTimerNotification } from "./notifications";
 import { setGrowverContext } from "./growverContext";
-import PlantRenderer from "./PlantRenderer";
+import PlantRenderer3D from "./PlantRenderer3D";
 
 const { width: SW } = Dimensions.get("window");
 import { getApiV1 } from "./apiConfig";
@@ -214,12 +214,12 @@ function TimerHero({ remaining, totalWait, onSkipAd, onSkipToken }) {
         width: 220, height: 220, borderRadius: 110,
         backgroundColor: `${glowCol}08`,
         borderWidth: 1, borderColor: `${glowCol}22`,
-      }} />
+      }} 
       <View style={{
         position: "absolute",
         width: 140, height: 140, borderRadius: 70,
         backgroundColor: `${glowCol}12`,
-      }} />
+      }} 
 
       {/* HUD corners */}
       {[
@@ -228,7 +228,7 @@ function TimerHero({ remaining, totalWait, onSkipAd, onSkipToken }) {
         { bottom: 14, left: SW * 0.18, borderBottomWidth: 1, borderLeftWidth: 1 },
         { bottom: 14, right: SW * 0.18, borderBottomWidth: 1, borderRightWidth: 1 },
       ].map((s, i) => (
-        <View key={i} style={{ position: "absolute", width: 18, height: 18, borderColor: `${glowCol}50`, ...s }} />
+        <View key={i} style={{ position: "absolute", width: 18, height: 18, borderColor: `${glowCol}50`, ...s }} 
       ))}
 
       {/* Progress arc — thin bar underneath countdown */}
@@ -236,7 +236,7 @@ function TimerHero({ remaining, totalWait, onSkipAd, onSkipToken }) {
         width: 180, height: 3, backgroundColor: C.border,
         borderRadius: 2, overflow: "hidden", position: "absolute", bottom: 38,
       }}>
-        <View style={{ width: `${pct * 100}%`, height: 3, backgroundColor: glowCol, borderRadius: 2 }} />
+        <View style={{ width: `${pct * 100}%`, height: 3, backgroundColor: glowCol, borderRadius: 2 }} 
       </View>
 
       {/* Countdown */}
@@ -316,11 +316,11 @@ function ShelveModal({ strain, metal, visible, onComplete, onSkipAd, strainType 
               strainType={strainType || "H"}
               tier={strain?.tier || "T4"}
               strainSeed={strain?.id || 1}
-            />
+            
             <Animated.View style={{
               position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
               borderRadius: 100, backgroundColor: `${m.colour}0c`, opacity: glowAnim,
-            }} />
+            }} 
           </View>
 
           {/* Base plaque */}
@@ -425,7 +425,7 @@ function TrophyCollection({ trophies, onBack }) {
           </View>
         </View>
         <View style={{ height: 2, backgroundColor: C.border, borderRadius: 2, marginTop: 12, overflow: "hidden" }}>
-          <View style={{ width: `${(total / 5042) * 100}%`, height: 2, backgroundColor: C.green, borderRadius: 2 }} />
+          <View style={{ width: `${(total / 5042) * 100}%`, height: 2, backgroundColor: C.green, borderRadius: 2 }} 
         </View>
         <Text style={{ color: C.grey, fontFamily: SANS, fontSize: 9, marginTop: 5 }}>
           {(total / 5042 * 100).toFixed(2)}% COMPLETE
@@ -487,7 +487,7 @@ function TrophyCollection({ trophies, onBack }) {
                   strainType={sType}
                   tier={item.tier}
                   strainSeed={item.strainId}
-                />
+                
                 {/* Info strip */}
                 <View style={{
                   flex: 1, alignItems: "center", justifyContent: "center",
@@ -507,7 +507,7 @@ function TrophyCollection({ trophies, onBack }) {
               </View>
             );
           }}
-        />
+        
       )}
     </View>
   );
@@ -733,7 +733,7 @@ export default function VirtualGrow({ trophies, onAddTrophy, tokens, onSpendToke
           {/* Progress bar */}
           <View style={{ width: "100%", marginBottom: 32 }}>
             <View style={{ height: 3, backgroundColor: C.border, borderRadius: 2, overflow: "hidden" }}>
-              <View style={{ width: `${(1 - pct) * 100}%`, height: 3, backgroundColor: C.green, borderRadius: 2 }} />
+              <View style={{ width: `${(1 - pct) * 100}%`, height: 3, backgroundColor: C.green, borderRadius: 2 }} 
             </View>
             <Text style={{ color: C.grey, fontFamily: SANS, fontSize: 10, marginTop: 6, textAlign: "center" }}>
               Trophy #{trophies.length} earned · Next wait: {getWaitFormatted(trophies.length + 1)}
@@ -808,7 +808,7 @@ export default function VirtualGrow({ trophies, onAddTrophy, tokens, onSpendToke
               </Text>
             </View>
             <View style={{ height: 2, backgroundColor: C.border, borderRadius: 2, overflow: "hidden" }}>
-              <View style={{ width: `${(trophies.length / 5042) * 100}%`, height: 2, backgroundColor: C.green }} />
+              <View style={{ width: `${(trophies.length / 5042) * 100}%`, height: 2, backgroundColor: C.green }} 
             </View>
             <Text style={{ color: C.grey, fontFamily: SANS, fontSize: 10, marginTop: 6 }}>
               {(trophies.length / 5042 * 100).toFixed(2)}% COMPLETE
@@ -853,7 +853,7 @@ export default function VirtualGrow({ trophies, onAddTrophy, tokens, onSpendToke
   if (loading) {
     return (
       <View style={{ flex: 1, backgroundColor: C.bg, alignItems: "center", justifyContent: "center" }}>
-        <ActivityIndicator color={C.green} size="large" />
+        <ActivityIndicator color={C.green} size="large" 
         <Text style={{ color: C.grey, fontFamily: SANS, fontSize: 13, marginTop: 14, letterSpacing: 1 }}>
           Rolling your next strain...
         </Text>
@@ -984,7 +984,7 @@ export default function VirtualGrow({ trophies, onAddTrophy, tokens, onSpendToke
               borderRadius: 2,
               shadowColor: isHarvest ? "#ffd700" : C.green,
               shadowOpacity: 0.8, shadowRadius: 4,
-            }} />
+            }} 
           </View>
         </View>
 
@@ -1009,7 +1009,7 @@ export default function VirtualGrow({ trophies, onAddTrophy, tokens, onSpendToke
               if (timerRef.current) clearInterval(timerRef.current);
               loadNextStrain();
             }}
-          />
+          
         ) : (
           <View style={{ alignItems: "center", paddingVertical: 4 }} {...panResponder.panHandlers}>
             <Animated.View style={{ opacity: fadeAnim }}>
@@ -1022,7 +1022,7 @@ export default function VirtualGrow({ trophies, onAddTrophy, tokens, onSpendToke
                 strainSeed={strain.id}
                 day={day}
                 totalDays={totalDays}
-              />
+              
             </Animated.View>
             <Text style={{ color: C.grey, fontFamily: SANS, fontSize: 10, marginTop: 2, letterSpacing: 1 }}>
               SWIPE TO TRAVEL THROUGH TIME
@@ -1203,7 +1203,7 @@ export default function VirtualGrow({ trophies, onAddTrophy, tokens, onSpendToke
                 {strain.aroma}
               </Text>
             </View>
-          </>
+          <
         )}
       </ScrollView>
 
@@ -1226,7 +1226,7 @@ export default function VirtualGrow({ trophies, onAddTrophy, tokens, onSpendToke
           setShowShelve(false);
           loadNextStrain();     // load next strain right away
         }}
-      />
+      
     </View>
   );
 }
