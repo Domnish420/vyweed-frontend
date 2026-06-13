@@ -1,7 +1,7 @@
 // PlantRenderer3D.jsx — Three.js cannabis plant via expo-gl
 // Requires EAS build (expo-gl is a native module).
 
-import React, { useCallback, useMemo, useRef, useEffect } from "react";
+import React, { useCallback, useMemo, useRef, useEffect, useState } from "react";
 import { View } from "react-native";
 import { GLView } from "expo-gl";
 import * as THREE from "three";
@@ -362,6 +362,10 @@ export default function PlantRenderer3D({
     return { sp, sh, frost, lean, plantH, spread, strainSeed };
   }, [stage, strainType, tier, strainSeed, day, totalDays]);
 
+  // When GL init fails, surface the error during render so Plant3DGuard catches it
+  const [glError, setGlError] = useState(null);
+  if (glError) throw glError;
+
   // Track whether component is still mounted + hold animation canceller
   const mountedRef = useRef(true);
   const cancelRef  = useRef(null);
@@ -448,7 +452,9 @@ export default function PlantRenderer3D({
         try { renderer.dispose(); } catch (_) {}
       };
     } catch (err) {
-      console.warn("[PlantRenderer3D] GL init failed:", err?.message || err);
+      // Surface into the render cycle so Plant3DGuard can catch it
+      // and swap to the SVG PlantRenderer fallback
+      setGlError(err instanceof Error ? err : new Error(String(err)));
     }
   }, [params]);
 
