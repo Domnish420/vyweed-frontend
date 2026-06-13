@@ -8,9 +8,28 @@ function getDracoModule() {
   if (_dracoModulePromise) return _dracoModulePromise;
   _dracoModulePromise = new Promise((resolve, reject) => {
     try {
-      // require() is intercepted by Metro — draco_decoder.js ships with three
-      const DracoDecoderModule = require("three/examples/jsm/libs/draco/draco_decoder.js");
-      DracoDecoderModule({ onModuleLoaded: resolve });
+      const raw = require("three/examples/jsm/libs/draco/draco_decoder.js");
+
+      if (typeof raw === "function") {
+        // React Native / Hermes: draco_decoder.js exports a factory function
+        // (ENVIRONMENT_IS_NODE is false, so the IIFE returns the inner function)
+        raw({ onModuleLoaded: resolve });
+      } else if (raw && typeof raw === "object") {
+        // Node.js test env or already-initialized module path:
+        // module was auto-executed and exported the result object
+        if (typeof raw.Decoder === "function") {
+          // Fully initialized synchronously — use it directly
+          resolve(raw);
+        } else if (raw.ready && typeof raw.ready.then === "function") {
+          // Module is initializing asynchronously, wait for .ready Promise
+          raw.ready.then(() => resolve(raw)).catch(reject);
+        } else {
+          // Unknown object shape — try the onModuleLoaded hook anyway
+          raw.onModuleLoaded = resolve;
+        }
+      } else {
+        reject(new Error("draco_decoder.js did not export a usable value"));
+      }
     } catch (err) {
       reject(new Error("Draco init failed: " + (err?.message || err)));
     }
