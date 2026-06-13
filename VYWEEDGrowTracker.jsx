@@ -6,7 +6,8 @@ import {
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as ImagePicker from "expo-image-picker";
-import Svg, { Defs, RadialGradient, Stop, Rect as SvgRect } from "react-native-svg";
+import { CameraView, useCameraPermissions } from "expo-camera";
+import Svg, { Defs, RadialGradient, Stop, Rect as SvgRect, Circle, Rect, ClipPath } from "react-native-svg";
 import NutrientSchedule from "./NutrientSchedule";
 import GrowTimeline from "./GrowTimeline";
 import { cachedFetch, saveToCache, loadFromCache } from "./cache";
@@ -24,6 +25,45 @@ const { width: SW, height: SH } = Dimensions.get("window");
 import { getApiV1, BACKEND_HEADERS } from "./apiConfig";
 import { setGrowverContext } from "./growverContext";
 const API_BASE = { toString: () => getApiV1() };
+
+// ── Guided scan steps ─────────────────────────────────────────────────────────
+const SCAN_STEPS = [
+  {
+    id: "canopy",
+    label: "TOP-DOWN CANOPY",
+    instruction: "Hold phone directly above — look straight down at the full canopy",
+    icon: "🌿",
+    guide: "topCircle",
+  },
+  {
+    id: "side",
+    label: "FULL SIDE VIEW",
+    instruction: "Step back — frame the entire plant from pot base to top",
+    icon: "📏",
+    guide: "fullRect",
+  },
+  {
+    id: "cola",
+    label: "MAIN COLA",
+    instruction: "Get close to the largest bud site — fill the frame with it",
+    icon: "🌸",
+    guide: "centerCircle",
+  },
+  {
+    id: "leaf",
+    label: "FAN LEAF",
+    instruction: "Find a mid-canopy fan leaf — fill the frame. Shows deficiencies.",
+    icon: "🍃",
+    guide: "leafRect",
+  },
+  {
+    id: "base",
+    label: "BASE & STEM",
+    instruction: "Point down at the pot and stem base — shows root zone health",
+    icon: "🪴",
+    guide: "baseCircle",
+  },
+];
 
 // ── Palette ───────────────────────────────────────────────────────────────────
 const C = {
@@ -527,7 +567,7 @@ const STAGE_GLOW = {
 const HERO_H = Math.round(SH * 0.35);
 
 function GrowHero({ strainName, stage, day, medium, startDate, logCount,
-                    criticalCount, onBack, onCheckin, onNutrients, onTimeline, onPhotos, onScan }) {
+                    criticalCount, onBack, onCheckin, onNutrients, onTimeline, onPhotos, onScan, onGuidedScan }) {
   const floatAnim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     const loop = Animated.loop(
@@ -684,9 +724,9 @@ function GrowHero({ strainName, stage, day, medium, startDate, logCount,
         </TouchableOpacity>
       </View>
 
-      {/* Scan plant action */}
+      {/* Scan plant actions */}
       <View style={{ paddingHorizontal: 16, paddingTop: 0, paddingBottom: 10,
-        borderBottomWidth: 1, borderColor: C.border }}>
+        borderBottomWidth: 1, borderColor: C.border, gap: 8 }}>
         <TouchableOpacity onPress={onScan} style={{
           backgroundColor: C.surface, borderRadius: 20,
           borderWidth: 1, borderColor: C.amber, paddingVertical: 8, alignItems: "center",
@@ -695,13 +735,22 @@ function GrowHero({ strainName, stage, day, medium, startDate, logCount,
             📸 SCAN PLANT
           </Text>
         </TouchableOpacity>
+        <TouchableOpacity onPress={onGuidedScan} style={{
+          borderWidth: 1, borderColor: C.green,
+          borderRadius: 8, paddingVertical: 10, paddingHorizontal: 16,
+          flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+        }}>
+          <Text style={{ color: C.green, fontFamily: MONO, fontSize: 11 }}>
+            📐 GUIDED SCAN — 5 SHOTS
+          </Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
 }
 
 // ── SCREEN: Grow Detail ───────────────────────────────────────────────────────
-function GrowDetailScreen({ grow, onBack, onCheckin, onNutrients, onTimeline, onPhotos, onScan }) {
+function GrowDetailScreen({ grow, onBack, onCheckin, onNutrients, onTimeline, onPhotos, onScan, onGuidedScan }) {
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("today");
@@ -774,6 +823,7 @@ function GrowDetailScreen({ grow, onBack, onCheckin, onNutrients, onTimeline, on
         onTimeline={onTimeline}
         onPhotos={onPhotos}
         onScan={onScan}
+        onGuidedScan={onGuidedScan}
       />
 
       {/* Tab bar */}
@@ -1798,6 +1848,662 @@ function PlantScanModal({ visible, growId, onClose, onApply }) {
   );
 }
 
+// ── COMPONENT: SVG scan guide overlays ───────────────────────────────────────
+function ScanGuide({ type, width, height }) {
+  const stroke = "#00ff88";
+  const sw = 2;
+  const dash = "8 6";
+  const op = 0.6;
+  const fillOp = 0.05;
+  const cx = width / 2;
+  const cy = height / 2;
+
+  if (type === "topCircle") {
+    const r = Math.min(width, height) * 0.42;
+    return (
+      <Svg width={width} height={height} style={StyleSheet.absoluteFill}>
+        <Circle
+          cx={cx} cy={cy} r={r}
+          stroke={stroke} strokeWidth={sw} strokeDasharray={dash}
+          fill={stroke} fillOpacity={fillOp}
+          strokeOpacity={op}
+        />
+      </Svg>
+    );
+  }
+
+  if (type === "fullRect") {
+    const rw = width * 0.55;
+    const rh = height * 0.85;
+    return (
+      <Svg width={width} height={height} style={StyleSheet.absoluteFill}>
+        <Rect
+          x={cx - rw / 2} y={cy - rh / 2} width={rw} height={rh}
+          rx={10} ry={10}
+          stroke={stroke} strokeWidth={sw} strokeDasharray={dash}
+          fill={stroke} fillOpacity={fillOp}
+          strokeOpacity={op}
+        />
+      </Svg>
+    );
+  }
+
+  if (type === "centerCircle") {
+    const r = Math.min(width, height) * 0.30;
+    return (
+      <Svg width={width} height={height} style={StyleSheet.absoluteFill}>
+        <Circle
+          cx={cx} cy={cy} r={r}
+          stroke={stroke} strokeWidth={sw} strokeDasharray={dash}
+          fill={stroke} fillOpacity={fillOp}
+          strokeOpacity={op}
+        />
+      </Svg>
+    );
+  }
+
+  if (type === "leafRect") {
+    const rw = width * 0.78;
+    const rh = height * 0.45;
+    return (
+      <Svg width={width} height={height} style={StyleSheet.absoluteFill}>
+        <Rect
+          x={cx - rw / 2} y={cy - rh / 2} width={rw} height={rh}
+          rx={10} ry={10}
+          stroke={stroke} strokeWidth={sw} strokeDasharray={dash}
+          fill={stroke} fillOpacity={fillOp}
+          strokeOpacity={op}
+        />
+      </Svg>
+    );
+  }
+
+  if (type === "baseCircle") {
+    const r = Math.min(width, height) * 0.28;
+    const bcy = height * 0.72;
+    return (
+      <Svg width={width} height={height} style={StyleSheet.absoluteFill}>
+        <Circle
+          cx={cx} cy={bcy} r={r}
+          stroke={stroke} strokeWidth={sw} strokeDasharray={dash}
+          fill={stroke} fillOpacity={fillOp}
+          strokeOpacity={op}
+        />
+      </Svg>
+    );
+  }
+
+  return null;
+}
+
+// ── MODAL: Guided 5-shot plant scan ──────────────────────────────────────────
+//
+// Backend API contract:
+//   POST /api/v1/vision/analyze-plant-multi
+//   Content-Type: multipart/form-data
+//   Fields: image_1..image_5 (jpeg files), grow_id (optional), scan_type="guided_5shot"
+//
+//   Response 200: same schema as /vision/analyze-plant
+//   {
+//     stage, health_pct, deficiencies, issues, notes, confidence
+//   }
+
+function GuidedScanModal({ visible, growId, onClose, onApply }) {
+  // step: 0–4 = capture, 5 = review, 6 = analysing, 7 = results
+  const [step,    setStep]   = useState(0);
+  const [photos,  setPhotos] = useState([]);  // array of { uri }
+  const [result,  setResult] = useState(null);
+  const cameraRef = useRef(null);
+  const [permission, requestPermission] = useCameraPermissions();
+
+  // Cycling status messages during analysis
+  const analysisMsgs = [
+    "Checking stage...",
+    "Scanning for deficiencies...",
+    "Reading trichome development...",
+    "Assessing root zone...",
+  ];
+  const [msgIdx, setMsgIdx] = useState(0);
+  useEffect(() => {
+    if (step !== 6) return;
+    setMsgIdx(0);
+    const iv = setInterval(() => setMsgIdx(i => (i + 1) % analysisMsgs.length), 2000);
+    return () => clearInterval(iv);
+  }, [step]);
+
+  // Pulsing animation for analysis overlay
+  const pulseAnim = useRef(new Animated.Value(0.4)).current;
+  useEffect(() => {
+    if (step !== 6) return;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, { toValue: 1.0, duration: 700, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 0.4, duration: 700, useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [step]);
+
+  // Slide-up animation for results
+  const slideAnim = useRef(new Animated.Value(80)).current;
+  const fadeAnim  = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (step !== 7 || !result) return;
+    slideAnim.setValue(80);
+    fadeAnim.setValue(0);
+    Animated.parallel([
+      Animated.timing(slideAnim, { toValue: 0,   duration: 380, useNativeDriver: true }),
+      Animated.timing(fadeAnim,  { toValue: 1.0, duration: 350, useNativeDriver: true }),
+    ]).start();
+  }, [step, result]);
+
+  const reset = () => {
+    setStep(0);
+    setPhotos([]);
+    setResult(null);
+  };
+
+  const handleClose = () => {
+    reset();
+    onClose();
+  };
+
+  const capture = async () => {
+    if (!cameraRef.current) return;
+    try {
+      const photo = await cameraRef.current.takePictureAsync({ quality: 0.75, skipProcessing: false });
+      const next = [...photos, { uri: photo.uri }];
+      setPhotos(next);
+      if (step < SCAN_STEPS.length - 1) {
+        setStep(s => s + 1);
+      } else {
+        setStep(5); // go to review
+      }
+    } catch (e) {
+      Alert.alert("Capture failed", e.message);
+    }
+  };
+
+  const analyse = async () => {
+    setStep(6);
+    try {
+      const formData = new FormData();
+      photos.forEach((p, i) => {
+        formData.append(`image_${i + 1}`, {
+          uri:  p.uri,
+          type: "image/jpeg",
+          name: `scan_${SCAN_STEPS[i].id}.jpg`,
+        });
+      });
+      if (growId) formData.append("grow_id", String(growId));
+      formData.append("scan_type", "guided_5shot");
+
+      const res = await fetch(`${getApiV1()}/vision/analyze-plant-multi`, {
+        method:  "POST",
+        headers: { ...BACKEND_HEADERS },
+        body:    formData,
+      });
+      if (!res.ok) throw new Error(`${res.status}`);
+      const data = await res.json();
+      setResult(data);
+      setStep(7);
+    } catch (e) {
+      Alert.alert("Analysis failed", e.message || "Could not reach Growver.");
+      setStep(5); // back to review
+    }
+  };
+
+  const apply = async () => {
+    try {
+      await AsyncStorage.setItem(
+        `guided_scan:${growId}:${Date.now()}`,
+        JSON.stringify({ ...result, photos: photos.map(p => p.uri), scanned_at: new Date().toISOString() })
+      );
+      onApply(result);
+    } catch {}
+    handleClose();
+  };
+
+  // ── Shared result-card helpers (same as PlantScanModal) ───────────────────
+  function stageColour(stage) {
+    if (!stage) return C.greyLight;
+    const s = stage.toLowerCase();
+    if (s.includes("seed"))    return C.blue;
+    if (s.includes("veg"))     return C.greenBright;
+    if (s.includes("pre"))     return C.amber;
+    if (s.includes("flower"))  return "#c8733a";
+    if (s.includes("harvest")) return "#d4a84b";
+    return C.greyLight;
+  }
+  function healthColour(pct) {
+    if (pct >= 75) return C.greenBright;
+    if (pct >= 50) return C.amber;
+    return C.red;
+  }
+  function stageGlyph(stage) {
+    if (!stage) return "🌱";
+    const s = stage.toLowerCase();
+    if (s.includes("seed"))    return "🌱";
+    if (s.includes("veg"))     return "🌿";
+    if (s.includes("pre"))     return "🌸";
+    if (s.includes("flower"))  return "💐";
+    if (s.includes("harvest")) return "✂️";
+    return "🌱";
+  }
+
+  const camW = SW;
+  const camH = Math.round(SH * 0.52);
+  const currentStep = SCAN_STEPS[step] || SCAN_STEPS[0];
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent={false} onRequestClose={handleClose}>
+      <View style={{ flex: 1, backgroundColor: "#050a05" }}>
+
+        {/* ── PHASE 0–4: Guided capture ──────────────────────────────────── */}
+        {step >= 0 && step <= 4 && (
+          <View style={{ flex: 1 }}>
+            {/* Progress dots + shot label */}
+            <View style={{
+              paddingTop: Platform.OS === "android" ? (StatusBar.currentHeight || 24) + 10 : 54,
+              paddingHorizontal: 20, paddingBottom: 10,
+              flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+            }}>
+              <View style={{ flexDirection: "row", gap: 6, alignItems: "center" }}>
+                {SCAN_STEPS.map((_, i) => (
+                  <View key={i} style={{
+                    width: i === step ? 10 : 7,
+                    height: i === step ? 10 : 7,
+                    borderRadius: 5,
+                    backgroundColor: i < step ? "#00ff88" : i === step ? C.white : C.grey,
+                    borderWidth: i > step ? 1 : 0,
+                    borderColor: C.grey,
+                  }} />
+                ))}
+              </View>
+              <Text style={{ color: C.greyLight, fontFamily: MONO, fontSize: 11, letterSpacing: 1 }}>
+                SHOT {step + 1} OF {SCAN_STEPS.length}
+              </Text>
+            </View>
+
+            {/* Step icon + label */}
+            <View style={{ paddingHorizontal: 20, paddingBottom: 10, flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <Text style={{ fontSize: 22 }}>{currentStep.icon}</Text>
+              <Text style={{ color: C.greenBright, fontFamily: HEADING, fontSize: 18, letterSpacing: 2 }}>
+                {currentStep.label}
+              </Text>
+            </View>
+
+            {/* Camera view */}
+            <View style={{ width: camW, height: camH, backgroundColor: "#000", position: "relative" }}>
+              {!permission?.granted ? (
+                <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 24 }}>
+                  <Text style={{ color: C.white, fontFamily: SANS_MED, fontSize: 14, textAlign: "center", marginBottom: 16 }}>
+                    Camera permission is required to use guided scan.
+                  </Text>
+                  <GreenBtn label="GRANT CAMERA ACCESS" onPress={requestPermission} small />
+                </View>
+              ) : (
+                <>
+                  <CameraView
+                    ref={cameraRef}
+                    style={StyleSheet.absoluteFill}
+                    facing="back"
+                  />
+                  <ScanGuide type={currentStep.guide} width={camW} height={camH} />
+                </>
+              )}
+            </View>
+
+            {/* Instruction */}
+            <View style={{ paddingHorizontal: 20, paddingTop: 14, paddingBottom: 10 }}>
+              <Text style={{ color: C.greyLight, fontFamily: SANS, fontSize: 13, lineHeight: 20, textAlign: "center" }}>
+                {currentStep.instruction}
+              </Text>
+            </View>
+
+            {/* Capture button */}
+            <View style={{ alignItems: "center", paddingVertical: 10 }}>
+              <TouchableOpacity
+                onPress={capture}
+                activeOpacity={0.8}
+                style={{
+                  width: 70, height: 70, borderRadius: 35,
+                  backgroundColor: "#00ff88",
+                  alignItems: "center", justifyContent: "center",
+                  borderWidth: 3, borderColor: C.white,
+                  shadowColor: "#00ff88", shadowRadius: 14, shadowOpacity: 0.7, elevation: 8,
+                }}
+              >
+                <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: "#050a05" }} />
+              </TouchableOpacity>
+              <Text style={{ color: C.greyLight, fontFamily: HEADING, fontSize: 12, letterSpacing: 2, marginTop: 8 }}>
+                CAPTURE
+              </Text>
+            </View>
+
+            {/* Cancel */}
+            <TouchableOpacity onPress={handleClose} activeOpacity={0.7}
+              style={{ alignItems: "center", paddingVertical: 12 }}>
+              <Text style={{ color: C.grey, fontFamily: HEADING, fontSize: 13, letterSpacing: 2 }}>
+                ✕ CANCEL SCAN
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* ── PHASE 5: Review thumbnails ─────────────────────────────────── */}
+        {step === 5 && (
+          <ScrollView contentContainerStyle={{ paddingBottom: 48 }}>
+            {/* Header */}
+            <View style={{
+              paddingTop: Platform.OS === "android" ? (StatusBar.currentHeight || 24) + 16 : 58,
+              paddingHorizontal: 20, paddingBottom: 14,
+              borderBottomWidth: 1, borderColor: C.border,
+            }}>
+              <Text style={{ color: C.greenBright, fontFamily: HEADING, fontSize: 22, letterSpacing: 2 }}>
+                REVIEW SHOTS
+              </Text>
+              <Text style={{ color: C.greyLight, fontFamily: SANS_MED, fontSize: 12, marginTop: 2 }}>
+                5 angles captured — ready to send to Growver
+              </Text>
+            </View>
+
+            {/* 2-column thumbnail grid */}
+            <View style={{ flexDirection: "row", flexWrap: "wrap", padding: 12, gap: 10 }}>
+              {photos.map((p, i) => {
+                const thumbW = (SW - 44) / 2;
+                const isLast = i === photos.length - 1 && photos.length % 2 === 1;
+                return (
+                  <View key={i} style={{
+                    width: isLast ? "100%" : thumbW,
+                    alignItems: isLast ? "center" : "flex-start",
+                  }}>
+                    <View style={{ position: "relative", width: isLast ? thumbW : "100%" }}>
+                      <Image
+                        source={{ uri: p.uri }}
+                        style={{
+                          width: "100%", height: 150,
+                          borderRadius: 8, resizeMode: "cover",
+                          backgroundColor: C.surface,
+                        }}
+                      />
+                      {/* Green tick overlay */}
+                      <View style={{
+                        position: "absolute", top: 6, right: 6,
+                        width: 22, height: 22, borderRadius: 11,
+                        backgroundColor: "#00ff88", alignItems: "center", justifyContent: "center",
+                      }}>
+                        <Text style={{ color: "#050a05", fontSize: 13, fontFamily: SANS_BOLD }}>✓</Text>
+                      </View>
+                    </View>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4, paddingLeft: 2 }}>
+                      <Text style={{ fontSize: 11 }}>{SCAN_STEPS[i].icon}</Text>
+                      <Text style={{ color: C.greyLight, fontFamily: MONO, fontSize: 9, letterSpacing: 1 }}>
+                        {SCAN_STEPS[i].label}
+                      </Text>
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+
+            {/* Action buttons */}
+            <View style={{ paddingHorizontal: 20, gap: 10, marginTop: 6 }}>
+              <TouchableOpacity
+                onPress={analyse}
+                activeOpacity={0.8}
+                style={{
+                  backgroundColor: C.greenFaint, borderRadius: 10,
+                  borderWidth: 1, borderColor: C.green,
+                  paddingVertical: 15, alignItems: "center",
+                }}
+              >
+                <Text style={{ color: C.greenBright, fontFamily: HEADING, fontSize: 18, letterSpacing: 2 }}>
+                  ANALYSE PLANT →
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => { setPhotos([]); setStep(0); }}
+                activeOpacity={0.7}
+                style={{
+                  borderWidth: 1, borderColor: C.border, borderRadius: 10,
+                  paddingVertical: 12, alignItems: "center",
+                }}
+              >
+                <Text style={{ color: C.greyLight, fontFamily: HEADING, fontSize: 15, letterSpacing: 2 }}>
+                  RETAKE →
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity onPress={handleClose} activeOpacity={0.7}
+                style={{ alignItems: "center", paddingVertical: 10 }}>
+                <Text style={{ color: C.grey, fontFamily: HEADING, fontSize: 13, letterSpacing: 2 }}>
+                  ✕ CANCEL
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        )}
+
+        {/* ── PHASE 6: Analysing overlay ─────────────────────────────────── */}
+        {step === 6 && (
+          <View style={{ flex: 1 }}>
+            {/* Small thumbnails grid in background */}
+            <View style={{ flex: 1, padding: 16 }}>
+              <View style={{
+                paddingTop: Platform.OS === "android" ? (StatusBar.currentHeight || 24) + 10 : 54,
+                paddingBottom: 16,
+              }}>
+                <Text style={{ color: C.greyLight, fontFamily: HEADING, fontSize: 14, letterSpacing: 2, textAlign: "center" }}>
+                  5 ANGLES CAPTURED
+                </Text>
+              </View>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, justifyContent: "center" }}>
+                {photos.map((p, i) => (
+                  <Image key={i} source={{ uri: p.uri }} style={{
+                    width: (SW - 56) / 3, height: 80,
+                    borderRadius: 6, resizeMode: "cover",
+                    backgroundColor: C.surface, opacity: 0.5,
+                  }} />
+                ))}
+              </View>
+            </View>
+
+            {/* Dark overlay */}
+            <View style={{
+              ...StyleSheet.absoluteFillObject,
+              backgroundColor: "rgba(5,10,5,0.78)",
+              alignItems: "center", justifyContent: "center",
+            }}>
+              <Animated.View style={{ opacity: pulseAnim, alignItems: "center", gap: 16 }}>
+                <View style={{
+                  width: 20, height: 20, borderRadius: 10,
+                  backgroundColor: "#00ff88",
+                  shadowColor: "#00ff88", shadowRadius: 16, shadowOpacity: 1,
+                  elevation: 10,
+                }} />
+                <Text style={{
+                  color: "#00ff88", fontFamily: HEADING,
+                  fontSize: 18, letterSpacing: 3, textAlign: "center",
+                }}>
+                  GROWVER IS ANALYSING{"\n"}5 ANGLES...
+                </Text>
+                <Text style={{ color: C.greyLight, fontFamily: SANS_MED, fontSize: 13, textAlign: "center" }}>
+                  {analysisMsgs[msgIdx]}
+                </Text>
+              </Animated.View>
+            </View>
+          </View>
+        )}
+
+        {/* ── PHASE 7: Results ───────────────────────────────────────────── */}
+        {step === 7 && result && (
+          <ScrollView contentContainerStyle={{ paddingBottom: 48 }} bounces={false}>
+            {/* Horizontal strip of thumbnails */}
+            <View style={{
+              paddingTop: Platform.OS === "android" ? (StatusBar.currentHeight || 24) + 10 : 54,
+              paddingBottom: 10,
+            }}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}>
+                {photos.map((p, i) => (
+                  <View key={i} style={{ alignItems: "center", gap: 4 }}>
+                    <Image source={{ uri: p.uri }} style={{
+                      width: 64, height: 64, borderRadius: 8,
+                      resizeMode: "cover", backgroundColor: C.surface,
+                    }} />
+                    <Text style={{ fontSize: 10 }}>{SCAN_STEPS[i].icon}</Text>
+                  </View>
+                ))}
+              </ScrollView>
+            </View>
+
+            {/* Results card */}
+            <Animated.View style={{
+              backgroundColor: C.card,
+              borderRadius: 20,
+              borderWidth: 1, borderColor: C.border,
+              padding: 20,
+              marginHorizontal: 0,
+              marginTop: 4,
+              transform: [{ translateY: slideAnim }],
+              opacity: fadeAnim,
+            }}>
+
+              {/* Stage pill */}
+              {result.stage && (() => {
+                const col = stageColour(result.stage);
+                return (
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 16 }}>
+                    <View style={{
+                      backgroundColor: `${col}22`, borderRadius: 20,
+                      paddingHorizontal: 14, paddingVertical: 6,
+                      borderWidth: 1, borderColor: `${col}80`,
+                      flexDirection: "row", alignItems: "center", gap: 6,
+                    }}>
+                      <Text style={{ fontSize: 16 }}>{stageGlyph(result.stage)}</Text>
+                      <Text style={{ color: col, fontFamily: HEADING, fontSize: 18, letterSpacing: 2 }}>
+                        {result.stage.toUpperCase()}
+                      </Text>
+                    </View>
+                    <Text style={{ color: C.greyLight, fontFamily: SANS_MED, fontSize: 11 }}>
+                      DETECTED STAGE
+                    </Text>
+                  </View>
+                );
+              })()}
+
+              {/* Health bar */}
+              {result.health_pct != null && (() => {
+                const pct = Math.max(0, Math.min(100, result.health_pct));
+                const col = healthColour(pct);
+                return (
+                  <View style={{ marginBottom: 16 }}>
+                    <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 6 }}>
+                      <Text style={{ color: C.greyLight, fontFamily: HEADING, fontSize: 12, letterSpacing: 2 }}>
+                        PLANT HEALTH
+                      </Text>
+                      <Text style={{ color: col, fontFamily: HEADING, fontSize: 18, letterSpacing: 1 }}>
+                        {pct}%
+                      </Text>
+                    </View>
+                    <View style={{ height: 8, backgroundColor: C.border, borderRadius: 4, overflow: "hidden" }}>
+                      <View style={{ height: 8, borderRadius: 4, backgroundColor: col, width: `${pct}%` }} />
+                    </View>
+                  </View>
+                );
+              })()}
+
+              {/* Deficiencies + issues */}
+              <View style={{ marginBottom: 16 }}>
+                <Text style={{ color: C.greyLight, fontFamily: HEADING, fontSize: 12,
+                  letterSpacing: 2, marginBottom: 8 }}>DEFICIENCIES</Text>
+                {(!result.deficiencies || result.deficiencies.length === 0) ? (
+                  <Text style={{ color: C.greenBright, fontFamily: SANS_MED, fontSize: 13 }}>
+                    None detected ✓
+                  </Text>
+                ) : (
+                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+                    {result.deficiencies.map((d, i) => (
+                      <View key={i} style={{
+                        backgroundColor: "#1a0808", borderRadius: 6,
+                        paddingHorizontal: 10, paddingVertical: 4,
+                        borderWidth: 1, borderColor: C.red,
+                      }}>
+                        <Text style={{ color: C.red, fontFamily: SANS_MED, fontSize: 12 }}>{d}</Text>
+                      </View>
+                    ))}
+                    {(result.issues || []).map((iss, i) => (
+                      <View key={`iss-${i}`} style={{
+                        backgroundColor: "#1a1008", borderRadius: 6,
+                        paddingHorizontal: 10, paddingVertical: 4,
+                        borderWidth: 1, borderColor: C.amber,
+                      }}>
+                        <Text style={{ color: C.amber, fontFamily: SANS_MED, fontSize: 12 }}>{iss}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </View>
+
+              {/* Growver notes */}
+              {result.notes && (
+                <View style={{
+                  backgroundColor: "#1a150a", borderRadius: 10,
+                  borderWidth: 1, borderColor: `${C.amber}60`,
+                  padding: 14, marginBottom: 16,
+                }}>
+                  <Text style={{ color: C.greyLight, fontFamily: HEADING, fontSize: 11,
+                    letterSpacing: 2, marginBottom: 6 }}>GROWVER SAYS</Text>
+                  <Text style={{ color: C.amber, fontFamily: SANS, fontSize: 13, lineHeight: 20, fontStyle: "italic" }}>
+                    "{result.notes}"
+                  </Text>
+                </View>
+              )}
+
+              {/* Confidence */}
+              {result.confidence != null && (
+                <Text style={{ color: C.grey, fontFamily: SANS_MED, fontSize: 11, marginBottom: 20 }}>
+                  Confidence: {Math.round(result.confidence * 100)}%
+                </Text>
+              )}
+
+              <View style={{ height: 1, backgroundColor: C.border, marginBottom: 16 }} />
+
+              {/* Apply */}
+              <TouchableOpacity
+                onPress={apply}
+                activeOpacity={0.75}
+                style={{
+                  backgroundColor: C.greenFaint, borderRadius: 10,
+                  borderWidth: 1, borderColor: C.green,
+                  paddingVertical: 14, alignItems: "center", marginBottom: 10,
+                }}
+              >
+                <Text style={{ color: C.greenBright, fontFamily: HEADING, fontSize: 18, letterSpacing: 2 }}>
+                  ✓ APPLY TO GROW
+                </Text>
+              </TouchableOpacity>
+
+              {/* Dismiss */}
+              <TouchableOpacity onPress={handleClose} activeOpacity={0.7}
+                style={{ alignItems: "center", paddingVertical: 12 }}>
+                <Text style={{ color: C.grey, fontFamily: HEADING, fontSize: 15, letterSpacing: 2 }}>
+                  DISMISS
+                </Text>
+              </TouchableOpacity>
+
+            </Animated.View>
+          </ScrollView>
+        )}
+
+      </View>
+    </Modal>
+  );
+}
+
 // ── Root App ──────────────────────────────────────────────────────────────────
 export default function VYWEEDGrowTracker({ onGrowCountChange, pendingStrain, onPendingStrainConsumed }) {
   const [screen, setScreen]           = useState("list");
@@ -1811,6 +2517,10 @@ export default function VYWEEDGrowTracker({ onGrowCountChange, pendingStrain, on
   // Plant scan state
   const [showScan,   setShowScan]   = useState(false);
   const [scanGrowId, setScanGrowId] = useState(null);
+
+  // Guided 5-shot scan state
+  const [showGuidedScan,   setShowGuidedScan]   = useState(false);
+  const [guidedScanGrowId, setGuidedScanGrowId] = useState(null);
 
   useEffect(() => {
     requestNotificationPermissions().catch(() => {});
@@ -1860,6 +2570,7 @@ export default function VYWEEDGrowTracker({ onGrowCountChange, pendingStrain, on
           onTimeline={() => setScreen("timeline")}
           onPhotos={() => setScreen("photos")}
           onScan={() => { setScanGrowId(selectedGrow.grow_id); setShowScan(true); }}
+          onGuidedScan={() => { setGuidedScanGrowId(selectedGrow.grow_id); setShowGuidedScan(true); }}
         />
       )}
 
@@ -1926,6 +2637,15 @@ export default function VYWEEDGrowTracker({ onGrowCountChange, pendingStrain, on
             setShowScan(false);
             setScanGrowId(null);
           }}
+        />
+      )}
+
+      {showGuidedScan && (
+        <GuidedScanModal
+          visible={showGuidedScan}
+          growId={guidedScanGrowId}
+          onClose={() => { setShowGuidedScan(false); setGuidedScanGrowId(null); }}
+          onApply={() => { setShowGuidedScan(false); setGuidedScanGrowId(null); }}
         />
       )}
     </View>
