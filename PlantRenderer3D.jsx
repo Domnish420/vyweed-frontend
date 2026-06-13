@@ -2,7 +2,7 @@
 // Requires a dev-client or EAS build (expo-gl is a native module).
 
 import React, { useCallback, useRef, useEffect, useState } from "react";
-import { View, ActivityIndicator, StyleSheet } from "react-native";
+import { View, ActivityIndicator, StyleSheet, Text } from "react-native";
 import { GLView } from "expo-gl";
 import * as THREE from "three";
 import * as FileSystem from "expo-file-system/legacy";
@@ -52,10 +52,14 @@ async function loadGLBIntoScene(localUri, scene, targetHeight = 3.5) {
 }
 
 // ── Placeholder while downloading or if GL fails ──────────────────────────────
-function Placeholder({ width, height, downloading }) {
+function Placeholder({ width, height, downloading, error }) {
   return (
     <View style={[styles.placeholder, { width, height }]}>
-      {downloading && <ActivityIndicator color="#2d6a4f" size="small" />}
+      {downloading
+        ? <ActivityIndicator color="#2d6a4f" size="small" />
+        : error
+          ? <Text style={{ color: "#2d6a4f", fontSize: 10, fontFamily: "SpaceGrotesk_400Regular", opacity: 0.6 }}>{error}</Text>
+          : null}
     </View>
   );
 }
@@ -65,6 +69,7 @@ function GLBViewer({ width, height, localUri }) {
   const mountedRef = useRef(true);
   const cancelRef  = useRef(null);
   const [failed, setFailed] = useState(false);
+  const [glErr, setGlErr]   = useState("");
 
   useEffect(() => {
     mountedRef.current = true;
@@ -130,12 +135,14 @@ function GLBViewer({ width, height, localUri }) {
         if (frameId != null) cancelAnimationFrame(frameId);
         try { renderer.dispose(); } catch (_) {}
       };
-    } catch (_) {
-      if (mountedRef.current) setFailed(true);
+    } catch (err) {
+      const msg = err?.message || String(err);
+      console.warn("[PlantRenderer3D]", msg);
+      if (mountedRef.current) { setFailed(true); setGlErr(msg.slice(0, 40)); }
     }
   }, [localUri]);
 
-  if (failed) return <Placeholder width={width} height={height} downloading={false} />;
+  if (failed) return <Placeholder width={width} height={height} downloading={false} error={glErr} />;
 
   return (
     <View style={{ width, height, overflow: "hidden" }}>
