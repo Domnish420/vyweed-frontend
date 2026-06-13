@@ -7,7 +7,7 @@ import {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as ImagePicker from "expo-image-picker";
 import { CameraView, useCameraPermissions } from "expo-camera";
-import Svg, { Defs, RadialGradient, Stop, Rect as SvgRect, Circle, Rect, ClipPath } from "react-native-svg";
+import Svg, { Defs, RadialGradient, Stop, Rect as SvgRect, Circle, Rect, ClipPath, Path, G } from "react-native-svg";
 import NutrientSchedule from "./NutrientSchedule";
 import GrowTimeline from "./GrowTimeline";
 import { cachedFetch, saveToCache, loadFromCache } from "./cache";
@@ -567,7 +567,7 @@ const STAGE_GLOW = {
 const HERO_H = Math.round(SH * 0.35);
 
 function GrowHero({ strainName, stage, day, medium, startDate, logCount,
-                    criticalCount, onBack, onCheckin, onNutrients, onTimeline, onPhotos, onScan, onGuidedScan }) {
+                    criticalCount, onBack, onCheckin, onNutrients, onTimeline, onPhotos, onScan, onGuidedScan, onVideoScan }) {
   const floatAnim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     const loop = Animated.loop(
@@ -744,13 +744,23 @@ function GrowHero({ strainName, stage, day, medium, startDate, logCount,
             📐 GUIDED SCAN — 5 SHOTS
           </Text>
         </TouchableOpacity>
+        <TouchableOpacity onPress={onVideoScan} style={{
+          borderWidth: 1, borderColor: "#a855f7",
+          borderRadius: 8, paddingVertical: 10, paddingHorizontal: 16,
+          flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+          marginTop: 6,
+        }}>
+          <Text style={{ color: "#a855f7", fontFamily: MONO, fontSize: 11 }}>
+            🎥 3D VIDEO SCAN — BUILD MY PLANT
+          </Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
 }
 
 // ── SCREEN: Grow Detail ───────────────────────────────────────────────────────
-function GrowDetailScreen({ grow, onBack, onCheckin, onNutrients, onTimeline, onPhotos, onScan, onGuidedScan }) {
+function GrowDetailScreen({ grow, onBack, onCheckin, onNutrients, onTimeline, onPhotos, onScan, onGuidedScan, onVideoScan }) {
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("today");
@@ -824,6 +834,7 @@ function GrowDetailScreen({ grow, onBack, onCheckin, onNutrients, onTimeline, on
         onPhotos={onPhotos}
         onScan={onScan}
         onGuidedScan={onGuidedScan}
+        onVideoScan={onVideoScan}
       />
 
       {/* Tab bar */}
@@ -2504,6 +2515,586 @@ function GuidedScanModal({ visible, growId, onClose, onApply }) {
   );
 }
 
+// ── MODAL: Video Orbit Scan for 3D Plant Reconstruction ──────────────────────
+//
+// Backend API contract:
+//   POST /api/v1/vision/reconstruct-3d
+//   Content-Type: multipart/form-data
+//   Fields:
+//     video     — mp4 file, 5–20 seconds, 720p
+//     grow_id   — string (optional)
+//     scan_type — "video_orbit"
+//
+//   Response 202 (async job started):
+//   {
+//     job_id: string,
+//     estimated_minutes: number,
+//     message: string
+//   }
+//
+//   Backend pipeline:
+//     1. ffmpeg: extract frame every 0.5s (~20-40 frames)
+//     2. rembg: background removal on each frame (rotoscoping)
+//     3. COLMAP: sparse reconstruction with masked images
+//     4. OpenMVS: dense reconstruction → mesh
+//     5. glTF export → .glb stored as grow_{grow_id}.glb
+//     6. Push notification to device when complete
+
+function VideoScanModal({ visible, growId, onClose, onDone }) {
+  const [phase, setPhase] = useState("intro");
+  // "intro" | "recording" | "confirming" | "uploading" | "done"
+  const [videoUri,    setVideoUri]    = useState(null);
+  const [duration,    setDuration]    = useState(0);    // seconds recorded
+  const [uploadPct,   setUploadPct]   = useState(0);    // 0-100 fake progress
+  const cameraRef = useRef(null);
+  const timerRef  = useRef(null);
+  const [permission, requestPermission] = useCameraPermissions();
+
+  // Orbit animation for intro screen
+  const orbitAnim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (phase !== "intro") return;
+    const loop = Animated.loop(
+      Animated.timing(orbitAnim, { toValue: 1, duration: 3000, useNativeDriver: false })
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [phase]);
+
+  // Upload icon pulse
+  const uploadPulse = useRef(new Animated.Value(0.4)).current;
+  useEffect(() => {
+    if (phase !== "uploading") return;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(uploadPulse, { toValue: 1.0, duration: 600, useNativeDriver: true }),
+        Animated.timing(uploadPulse, { toValue: 0.4, duration: 600, useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [phase]);
+
+  // Fake upload progress bar animated value
+  const uploadBarAnim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (phase !== "uploading") return;
+    uploadBarAnim.setValue(0);
+    const anim = Animated.timing(uploadBarAnim, { toValue: 85, duration: 8000, useNativeDriver: false });
+    anim.start();
+    const listener = uploadBarAnim.addListener(({ value }) => setUploadPct(Math.round(value)));
+    return () => {
+      uploadBarAnim.removeListener(listener);
+      anim.stop();
+    };
+  }, [phase]);
+
+  // Timer counter during recording
+  useEffect(() => {
+    if (phase !== "recording") return;
+    timerRef.current = setInterval(() => {
+      setDuration(d => {
+        if (d >= 19) {
+          stopRecording();
+          return d;
+        }
+        return d + 1;
+      });
+    }, 1000);
+    return () => clearInterval(timerRef.current);
+  }, [phase]);
+
+  const reset = () => {
+    clearInterval(timerRef.current);
+    setPhase("intro");
+    setVideoUri(null);
+    setDuration(0);
+    setUploadPct(0);
+  };
+
+  const startRecording = async () => {
+    if (!cameraRef.current) return;
+    setPhase("recording");
+    setDuration(0);
+    try {
+      const video = await cameraRef.current.recordAsync({ maxDuration: 20 });
+      clearInterval(timerRef.current);
+      setVideoUri(video.uri);
+      setPhase("confirming");
+    } catch (e) {
+      clearInterval(timerRef.current);
+      Alert.alert("Recording failed", e.message);
+      setPhase("intro");
+    }
+  };
+
+  const stopRecording = () => {
+    clearInterval(timerRef.current);
+    cameraRef.current?.stopRecording();
+    // recordAsync promise resolves after stopRecording is called
+  };
+
+  const upload = async () => {
+    setPhase("uploading");
+    try {
+      const formData = new FormData();
+      formData.append('video', {
+        uri: videoUri,
+        type: 'video/mp4',
+        name: 'plant_orbit.mp4',
+      });
+      if (growId) formData.append('grow_id', String(growId));
+      formData.append('scan_type', 'video_orbit');
+
+      const res = await fetch(`${getApiV1()}/vision/reconstruct-3d`, {
+        method: 'POST',
+        headers: { ...BACKEND_HEADERS },
+        body: formData,
+      });
+      if (!res.ok) throw new Error(`${res.status}`);
+      // const data = await res.json(); // { job_id, estimated_minutes }
+      setPhase("done");
+    } catch (e) {
+      Alert.alert("Upload failed", e.message || "Check your connection and try again.");
+      setPhase("confirming");
+    }
+  };
+
+  const fmtTime = (secs) =>
+    `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
+
+  // Circular progress ring for stop button (SVG strokeDasharray trick)
+  const ringR = 42;
+  const ringCircumference = 2 * Math.PI * ringR;
+  const ringProgress = Math.min(1, duration / 20);
+  const ringDashoffset = ringCircumference * (1 - ringProgress);
+
+  return (
+    <Modal
+      visible={visible}
+      animationType="slide"
+      transparent={false}
+      onRequestClose={() => { reset(); onClose(); }}
+    >
+      <View style={{ flex: 1, backgroundColor: C.bg }}>
+
+        {/* ── PHASE: intro ──────────────────────────────────────────────────── */}
+        {phase === "intro" && (
+          <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: "center", padding: 24 }}>
+            {/* Header */}
+            <View style={{ alignItems: "center", marginBottom: 28 }}>
+              <Text style={{ fontSize: 36, marginBottom: 6 }}>🎥</Text>
+              <Text style={{ color: C.white, fontFamily: HEADING, fontSize: 28, letterSpacing: 3, textAlign: "center" }}>
+                3D PLANT SCAN
+              </Text>
+            </View>
+
+            {/* Animated orbit illustration */}
+            <View style={{ alignItems: "center", marginBottom: 24, height: 130 }}>
+              <Svg width={130} height={130}>
+                {/* Orbit circle */}
+                <Circle
+                  cx={65} cy={65} r={50}
+                  stroke={C.border} strokeWidth={1.5}
+                  fill="none" strokeDasharray="4 4"
+                />
+                {/* Plant stem */}
+                <Path
+                  d="M65 85 L65 68"
+                  stroke={C.greenBright} strokeWidth={2}
+                />
+                {/* Plant triangle */}
+                <Path
+                  d="M65 42 L57 68 L73 68 Z"
+                  fill={C.greenBright} opacity={0.9}
+                />
+                {/* Animated phone orbiting */}
+              </Svg>
+              {/* Phone marker animated on top */}
+              <Animated.View
+                style={{
+                  position: "absolute",
+                  width: 10, height: 18,
+                  backgroundColor: C.greenBright,
+                  borderRadius: 2,
+                  transform: [
+                    {
+                      translateX: orbitAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [0, 0],
+                      }),
+                    },
+                  ],
+                  // compute x/y via JS-driven animated
+                  left: (() => {
+                    const cx = 65 - 5; // centre minus half width
+                    return cx;
+                  })(),
+                  top: (() => {
+                    const cy = 65 - 9; // centre minus half height
+                    return cy;
+                  })(),
+                }}
+              >
+                {/* This view is the phone icon — we use a wrapper Animated.View that rotates around origin */}
+              </Animated.View>
+              {/* Use a rotating container approach instead */}
+              <Animated.View
+                pointerEvents="none"
+                style={{
+                  position: "absolute",
+                  width: 130, height: 130,
+                  transform: [{
+                    rotate: orbitAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: ["0deg", "360deg"],
+                    }),
+                  }],
+                }}
+              >
+                {/* Phone at 3 o'clock position: offset 55px right of centre */}
+                <View style={{
+                  position: "absolute",
+                  left: 65 + 55 - 5,   // cx + r - halfW
+                  top:  65      - 9,   // cy     - halfH
+                  width: 10, height: 18,
+                  backgroundColor: C.greenBright,
+                  borderRadius: 2,
+                }}/>
+              </Animated.View>
+            </View>
+
+            {/* How it works */}
+            <View style={{
+              backgroundColor: C.card, borderRadius: 12, padding: 20,
+              borderWidth: 1, borderColor: C.border, marginBottom: 20,
+            }}>
+              <Text style={{ color: C.greyLight, fontFamily: HEADING, fontSize: 13, letterSpacing: 2, marginBottom: 14 }}>
+                HOW IT WORKS
+              </Text>
+              {[
+                "Stand 60–90cm from your plant",
+                "Press REC and walk slowly in a full circle around the plant",
+                "Keep the full plant in frame",
+                "One smooth 10–15 second orbit",
+              ].map((step, i) => (
+                <View key={i} style={{ flexDirection: "row", gap: 10, marginBottom: 10, alignItems: "flex-start" }}>
+                  <View style={{
+                    width: 20, height: 20, borderRadius: 10,
+                    backgroundColor: C.greenFaint, borderWidth: 1, borderColor: C.greenDim,
+                    alignItems: "center", justifyContent: "center", marginTop: 1,
+                  }}>
+                    <Text style={{ color: C.greenBright, fontFamily: HEADING, fontSize: 11 }}>{i + 1}</Text>
+                  </View>
+                  <Text style={{ color: C.white, fontFamily: SANS, fontSize: 13, lineHeight: 20, flex: 1 }}>
+                    {step}
+                  </Text>
+                </View>
+              ))}
+            </View>
+
+            {/* Info blurb */}
+            <Text style={{ color: C.greyLight, fontFamily: SANS, fontSize: 12, lineHeight: 19, textAlign: "center", marginBottom: 28 }}>
+              {"Growver removes the background and builds a 3D model of your actual plant.\nYou'll get a notification when it's ready (usually 5–10 minutes)."}
+            </Text>
+
+            {/* Start button */}
+            {!permission?.granted ? (
+              <GreenBtn
+                label="GRANT CAMERA ACCESS"
+                onPress={requestPermission}
+                style={{ marginBottom: 12 }}
+              />
+            ) : (
+              <TouchableOpacity
+                onPress={startRecording}
+                activeOpacity={0.8}
+                style={{
+                  backgroundColor: C.greenFaint, borderRadius: 10,
+                  borderWidth: 1, borderColor: C.green,
+                  paddingVertical: 16, alignItems: "center", marginBottom: 12,
+                }}
+              >
+                <Text style={{ color: C.greenBright, fontFamily: HEADING, fontSize: 20, letterSpacing: 2 }}>
+                  🎥 START SCAN
+                </Text>
+              </TouchableOpacity>
+            )}
+
+            <TouchableOpacity
+              onPress={() => { reset(); onClose(); }}
+              activeOpacity={0.7}
+              style={{ alignItems: "center", paddingVertical: 12 }}
+            >
+              <Text style={{ color: C.grey, fontFamily: HEADING, fontSize: 15, letterSpacing: 2 }}>
+                CANCEL
+              </Text>
+            </TouchableOpacity>
+          </ScrollView>
+        )}
+
+        {/* ── PHASE: recording ──────────────────────────────────────────────── */}
+        {phase === "recording" && (
+          <View style={{ flex: 1 }}>
+            {/* Live camera */}
+            <CameraView
+              ref={cameraRef}
+              style={StyleSheet.absoluteFill}
+              facing="back"
+              mode="video"
+            />
+
+            {/* Orbit guide ring overlay */}
+            <View
+              pointerEvents="none"
+              style={{
+                position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
+                alignItems: "center", justifyContent: "center",
+              }}
+            >
+              <Svg width={SW * 0.8} height={SW * 0.8}>
+                <Circle
+                  cx={SW * 0.4} cy={SW * 0.4} r={SW * 0.38}
+                  stroke={C.greenBright}
+                  strokeWidth={2}
+                  strokeDasharray="10 8"
+                  fill="none"
+                  opacity={0.5}
+                />
+                {/* Arrow marker at top of ring */}
+                <Path
+                  d={`M${SW * 0.4 - 10} ${SW * 0.4 - SW * 0.38 + 10} L${SW * 0.4} ${SW * 0.4 - SW * 0.38 - 8} L${SW * 0.4 + 10} ${SW * 0.4 - SW * 0.38 + 10}`}
+                  stroke={C.greenBright}
+                  strokeWidth={2.5}
+                  fill="none"
+                  opacity={0.8}
+                />
+              </Svg>
+            </View>
+
+            {/* Timer at top centre */}
+            <View style={{
+              position: "absolute",
+              top: Platform.OS === "android" ? (StatusBar.currentHeight || 24) + 20 : 60,
+              left: 0, right: 0, alignItems: "center",
+            }}>
+              <Text style={{ color: C.white, fontFamily: HEADING, fontSize: 40, letterSpacing: 3 }}>
+                {fmtTime(duration)}
+              </Text>
+              <Text style={{ color: C.greyLight, fontFamily: MONO, fontSize: 11, letterSpacing: 2, marginTop: 2 }}>
+                MAX 20s
+              </Text>
+            </View>
+
+            {/* STOP button with circular progress ring */}
+            <View style={{
+              position: "absolute", bottom: 60, left: 0, right: 0,
+              alignItems: "center", justifyContent: "center",
+            }}>
+              {/* Progress ring around button */}
+              <Svg
+                width={100} height={100}
+                style={{ position: "absolute" }}
+              >
+                {/* Background ring */}
+                <Circle
+                  cx={50} cy={50} r={ringR}
+                  stroke={C.border}
+                  strokeWidth={4}
+                  fill="none"
+                />
+                {/* Progress ring */}
+                <Circle
+                  cx={50} cy={50} r={ringR}
+                  stroke={C.greenBright}
+                  strokeWidth={4}
+                  fill="none"
+                  strokeDasharray={`${ringCircumference}`}
+                  strokeDashoffset={ringDashoffset}
+                  strokeLinecap="round"
+                  transform={`rotate(-90, 50, 50)`}
+                />
+              </Svg>
+              {/* Red stop button */}
+              <TouchableOpacity
+                onPress={stopRecording}
+                activeOpacity={0.8}
+                style={{
+                  width: 72, height: 72, borderRadius: 36,
+                  backgroundColor: C.red,
+                  alignItems: "center", justifyContent: "center",
+                  borderWidth: 3, borderColor: C.white,
+                }}
+              >
+                <Text style={{ color: C.white, fontSize: 28 }}>■</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {/* ── PHASE: confirming ─────────────────────────────────────────────── */}
+        {phase === "confirming" && (
+          <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: "center", padding: 24 }}>
+            {/* Header */}
+            <View style={{ alignItems: "center", marginBottom: 24 }}>
+              <Text style={{ color: C.greenBright, fontFamily: HEADING, fontSize: 26, letterSpacing: 2 }}>
+                ✓ SCAN CAPTURED
+              </Text>
+              <Text style={{ color: C.greyLight, fontFamily: SANS_MED, fontSize: 14, marginTop: 6 }}>
+                Duration: {fmtTime(duration)}
+              </Text>
+            </View>
+
+            {/* Info card */}
+            <View style={{
+              backgroundColor: C.card, borderRadius: 12, padding: 20,
+              borderWidth: 1, borderColor: C.border, marginBottom: 16,
+            }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                <Text style={{ fontSize: 24 }}>🎥</Text>
+                <Text style={{ color: C.white, fontFamily: HEADING, fontSize: 16, letterSpacing: 1.5 }}>
+                  VIDEO READY TO UPLOAD
+                </Text>
+              </View>
+              <Text style={{ color: C.greyLight, fontFamily: SANS, fontSize: 13, lineHeight: 20 }}>
+                {"Growver will rotoscope each frame and reconstruct your plant in 3D."}
+              </Text>
+            </View>
+
+            {/* Data warning */}
+            <View style={{
+              flexDirection: "row", alignItems: "center", gap: 8,
+              backgroundColor: "#1a1a0a", borderRadius: 8,
+              borderWidth: 1, borderColor: C.amber,
+              padding: 12, marginBottom: 24,
+            }}>
+              <Text style={{ fontSize: 16 }}>⚠</Text>
+              <Text style={{ color: C.amber, fontFamily: SANS_MED, fontSize: 12, flex: 1 }}>
+                This may use ~30–50MB of data
+              </Text>
+            </View>
+
+            {/* Upload button */}
+            <TouchableOpacity
+              onPress={upload}
+              activeOpacity={0.8}
+              style={{
+                backgroundColor: C.greenFaint, borderRadius: 10,
+                borderWidth: 1, borderColor: C.green,
+                paddingVertical: 16, alignItems: "center", marginBottom: 12,
+              }}
+            >
+              <Text style={{ color: C.greenBright, fontFamily: HEADING, fontSize: 18, letterSpacing: 2 }}>
+                📤 BUILD MY 3D PLANT
+              </Text>
+            </TouchableOpacity>
+
+            {/* Retake */}
+            <TouchableOpacity
+              onPress={() => { setVideoUri(null); setDuration(0); startRecording(); }}
+              activeOpacity={0.7}
+              style={{ alignItems: "center", paddingVertical: 12 }}
+            >
+              <Text style={{ color: C.amber, fontFamily: HEADING, fontSize: 15, letterSpacing: 2 }}>
+                ↩ RETAKE
+              </Text>
+            </TouchableOpacity>
+
+            {/* Cancel */}
+            <TouchableOpacity
+              onPress={() => { reset(); onClose(); }}
+              activeOpacity={0.7}
+              style={{ alignItems: "center", paddingVertical: 12 }}
+            >
+              <Text style={{ color: C.grey, fontFamily: HEADING, fontSize: 15, letterSpacing: 2 }}>
+                CANCEL
+              </Text>
+            </TouchableOpacity>
+          </ScrollView>
+        )}
+
+        {/* ── PHASE: uploading ──────────────────────────────────────────────── */}
+        {phase === "uploading" && (
+          <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 32 }}>
+            {/* Animated upload icon */}
+            <Animated.Text style={{ fontSize: 64, opacity: uploadPulse, marginBottom: 20 }}>
+              📤
+            </Animated.Text>
+
+            <Text style={{ color: C.white, fontFamily: HEADING, fontSize: 22, letterSpacing: 3, marginBottom: 32, textAlign: "center" }}>
+              UPLOADING SCAN...
+            </Text>
+
+            {/* Progress bar */}
+            <View style={{ width: "100%", marginBottom: 12 }}>
+              <View style={{ height: 4, backgroundColor: C.border, borderRadius: 2, overflow: "hidden" }}>
+                <Animated.View style={{
+                  height: 4, backgroundColor: C.green, borderRadius: 2,
+                  width: uploadBarAnim.interpolate({
+                    inputRange: [0, 100],
+                    outputRange: ["0%", "100%"],
+                  }),
+                }} />
+              </View>
+              <Text style={{ color: C.greyLight, fontFamily: MONO, fontSize: 11, marginTop: 6, textAlign: "right" }}>
+                {uploadPct}%
+              </Text>
+            </View>
+
+            <Text style={{ color: C.greyLight, fontFamily: SANS, fontSize: 13, textAlign: "center", lineHeight: 20, marginBottom: 12 }}>
+              Growver is preparing your frames for reconstruction...
+            </Text>
+            <Text style={{ color: C.grey, fontFamily: SANS_MED, fontSize: 11, textAlign: "center" }}>
+              ~30–50MB — stay on WiFi
+            </Text>
+          </View>
+        )}
+
+        {/* ── PHASE: done ───────────────────────────────────────────────────── */}
+        {phase === "done" && (
+          <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 32 }}>
+            <Text style={{ fontSize: 64, marginBottom: 20 }}>🌿</Text>
+
+            <Text style={{ color: C.white, fontFamily: HEADING, fontSize: 22, letterSpacing: 2, textAlign: "center", marginBottom: 20 }}>
+              YOUR SCAN IS WITH GROWVER
+            </Text>
+
+            <View style={{
+              backgroundColor: C.card, borderRadius: 12, padding: 20,
+              borderWidth: 1, borderColor: C.border, marginBottom: 32, width: "100%",
+            }}>
+              <Text style={{ color: C.greyLight, fontFamily: SANS, fontSize: 13, lineHeight: 20, textAlign: "center", marginBottom: 12 }}>
+                {"We're rotoscoping your frames and building the 3D model. This usually takes 5–15 minutes."}
+              </Text>
+              <Text style={{ color: C.greyLight, fontFamily: SANS, fontSize: 13, lineHeight: 20, textAlign: "center" }}>
+                {"You'll be notified when your plant model is ready."}
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              onPress={() => {
+                reset();
+                onDone();
+              }}
+              activeOpacity={0.8}
+              style={{
+                backgroundColor: C.greenFaint, borderRadius: 10,
+                borderWidth: 1, borderColor: C.green,
+                paddingVertical: 16, paddingHorizontal: 40, alignItems: "center",
+              }}
+            >
+              <Text style={{ color: C.greenBright, fontFamily: HEADING, fontSize: 20, letterSpacing: 2 }}>
+                ✓ DONE
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+      </View>
+    </Modal>
+  );
+}
+
 // ── Root App ──────────────────────────────────────────────────────────────────
 export default function VYWEEDGrowTracker({ onGrowCountChange, pendingStrain, onPendingStrainConsumed }) {
   const [screen, setScreen]           = useState("list");
@@ -2521,6 +3112,10 @@ export default function VYWEEDGrowTracker({ onGrowCountChange, pendingStrain, on
   // Guided 5-shot scan state
   const [showGuidedScan,   setShowGuidedScan]   = useState(false);
   const [guidedScanGrowId, setGuidedScanGrowId] = useState(null);
+
+  // Video orbit scan state
+  const [showVideoScan,   setShowVideoScan]   = useState(false);
+  const [videoScanGrowId, setVideoScanGrowId] = useState(null);
 
   useEffect(() => {
     requestNotificationPermissions().catch(() => {});
@@ -2571,6 +3166,7 @@ export default function VYWEEDGrowTracker({ onGrowCountChange, pendingStrain, on
           onPhotos={() => setScreen("photos")}
           onScan={() => { setScanGrowId(selectedGrow.grow_id); setShowScan(true); }}
           onGuidedScan={() => { setGuidedScanGrowId(selectedGrow.grow_id); setShowGuidedScan(true); }}
+          onVideoScan={() => { setVideoScanGrowId(selectedGrow.grow_id); setShowVideoScan(true); }}
         />
       )}
 
@@ -2646,6 +3242,15 @@ export default function VYWEEDGrowTracker({ onGrowCountChange, pendingStrain, on
           growId={guidedScanGrowId}
           onClose={() => { setShowGuidedScan(false); setGuidedScanGrowId(null); }}
           onApply={() => { setShowGuidedScan(false); setGuidedScanGrowId(null); }}
+        />
+      )}
+
+      {showVideoScan && (
+        <VideoScanModal
+          visible={showVideoScan}
+          growId={videoScanGrowId}
+          onClose={() => { setShowVideoScan(false); setVideoScanGrowId(null); }}
+          onDone={() => { setShowVideoScan(false); setVideoScanGrowId(null); }}
         />
       )}
     </View>
