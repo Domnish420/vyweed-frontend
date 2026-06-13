@@ -1,6 +1,6 @@
 // useGLBAsset.js — Download and cache .glb models from GitHub Releases
 import { useState, useEffect, useRef } from "react";
-import * as FileSystem from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
 
 const RELEASE_BASE =
   "https://github.com/domnish420/vyweed-frontend/releases/download/v0.1-assets";

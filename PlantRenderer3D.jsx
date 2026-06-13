@@ -5,7 +5,7 @@ import React, { useCallback, useRef, useEffect, useState } from "react";
 import { View, ActivityIndicator, StyleSheet } from "react-native";
 import { GLView } from "expo-gl";
 import * as THREE from "three";
-import * as FileSystem from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
 import useGLBAsset from "./useGLBAsset";
 
 let GLTFLoader = null;
