@@ -309,7 +309,7 @@ function ShelveModal({ strain, metal, visible, onComplete, onSkipAd, strainType 
             alignItems: "center", justifyContent: "center", marginBottom: -20,
             overflow: "hidden",
           }}>
-            <PlantRenderer
+            <PlantRenderer3D
               width={200}
               height={200}
               stage="Harvest Ready"
@@ -480,7 +480,7 @@ function TrophyCollection({ trophies, onBack }) {
                 overflow: "hidden",
               }}>
                 {/* Full-bloom plant */}
-                <PlantRenderer
+                <PlantRenderer3D
                   width={cellSize}
                   height={plantH}
                   stage="Harvest Ready"
@@ -1013,7 +1013,7 @@ export default function VirtualGrow({ trophies, onAddTrophy, tokens, onSpendToke
         ) : (
           <View style={{ alignItems: "center", paddingVertical: 4 }} {...panResponder.panHandlers}>
             <Animated.View style={{ opacity: fadeAnim }}>
-              <PlantRenderer
+              <PlantRenderer3D
                 width={260}
                 height={270}
                 stage={description?.stage || "Seedling"}

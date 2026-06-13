@@ -364,7 +364,7 @@ export default function TrainingGrow({ onComplete, mode = "outdoor" }) {
 
           {/* Plant renderer */}
           <View style={s.plantWrapper}>
-            <PlantRenderer
+            <PlantRenderer3D
               width={SW}
               height={260}
               stage={stageName}
@@ -450,7 +450,7 @@ export default function TrainingGrow({ onComplete, mode = "outdoor" }) {
 
         {/* Final plant */}
         <View style={s.reviewPlantWrapper}>
-          <PlantRenderer
+          <PlantRenderer3D
             width={200}
             height={200}
             stage="Harvest Ready"

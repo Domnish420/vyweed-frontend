@@ -784,7 +784,7 @@ export default function GrowRoom({ trophies, onAddTrophy, tokens, onEarnToken, o
 
         {/* ── Plant visual ── */}
         <View style={{ alignItems: "center", paddingVertical: 8 }}>
-          <PlantRenderer
+          <PlantRenderer3D
             width={260}
             height={280}
             stage={description?.stage || "Seedling"}

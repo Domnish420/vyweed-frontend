@@ -916,7 +916,7 @@ export default function RTLGrow({ trophies, onAddTrophy, tokens, onEarnToken, on
 
         {/* ── Plant visual ─── */}
         <View style={{ alignItems: "center", paddingVertical: 8 }}>
-          <PlantRenderer
+          <PlantRenderer3D
             width={260}
             height={280}
             stage={description?.stage || "Seedling"}

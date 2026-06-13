@@ -993,7 +993,7 @@ export default function VPDCalculator() {
                 <View style={{ backgroundColor: C.surface, borderRadius: 12,
                   overflow: "hidden", alignItems: "center",
                   marginBottom: 16, padding: 8 }}>
-                  <PlantRenderer
+                  <PlantRenderer3D
                     width={SW - 48}
                     height={190}
                     stage={curStage.rendStage}
@@ -1169,7 +1169,7 @@ export default function VPDCalculator() {
                 <View style={{ backgroundColor: C.surface, borderRadius: 12,
                   overflow: "hidden", alignItems: "center",
                   marginBottom: 16, padding: 8 }}>
-                  <PlantRenderer
+                  <PlantRenderer3D
                     width={SW - 48}
                     height={200}
                     stage="Late Flower"
