@@ -5,7 +5,8 @@
  * SIMULATE tab — 3-phase grow simulator with Growver narration.
  */
 
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { setGrowverContext } from "./growverContext";
 import {
   View, Text, ScrollView, TouchableOpacity,
@@ -173,12 +174,76 @@ const SIM_HAZARDS = [
   },
 ];
 
+// ── Scenario library — pre-built real-life crisis situations ─────────────────
+const SCENARIO_LIBRARY = [
+  {
+    key: "first_timer",
+    name: "FIRST TIMER",      icon: "🌱",
+    desc: "The two most common beginner mistakes — overwatering then overfeeding",
+    slots: { seedling: "ROOT_DROWN", early_veg: "ROOT_DROWN", late_veg: "OVERFEEDING" },
+  },
+  {
+    key: "summer_meltdown",
+    name: "SUMMER MELTDOWN",  icon: "☀️",
+    desc: "AC fails mid-grow — heat stress locks in through the critical flower window",
+    slots: { transition: "HEAT_WAVE", early_flower: "HEAT_WAVE", mid_flower: "HEAT_WAVE" },
+  },
+  {
+    key: "winter_blackout",
+    name: "WINTER BLACKOUT",  icon: "❄️",
+    desc: "Heating cuts out overnight — cold shock stalls veg growth and locks out nutrients",
+    slots: { early_veg: "COLD_SNAP", late_veg: "COLD_SNAP" },
+  },
+  {
+    key: "bud_rot_season",
+    name: "BUD ROT SEASON",   icon: "🍄",
+    desc: "Dehumidifier dies in flower — grey mould colonises dense bud sites",
+    slots: { mid_flower: "HUMIDITY_CRISIS", late_flower: "HUMIDITY_CRISIS" },
+  },
+  {
+    key: "hermie_harvest",
+    name: "HERMIE HARVEST",   icon: "💡",
+    desc: "A light leak during early flower triggers hermaphroditism — seeds ruin the crop",
+    slots: { early_flower: "DARK_INTERRUPT" },
+  },
+  {
+    key: "nute_lockout",
+    name: "NUTE LOCKOUT",     icon: "☠️",
+    desc: "Overfeeding during stretch burns the root zone and locks everything out",
+    slots: { late_veg: "OVERFEEDING", transition: "OVERFEEDING" },
+  },
+  {
+    key: "perfect_storm",
+    name: "PERFECT STORM",    icon: "⛈️",
+    desc: "Heat wave into flower followed by a humidity crisis — a complete disaster",
+    slots: { early_flower: "HEAT_WAVE", mid_flower: "HUMIDITY_CRISIS", late_flower: "HUMIDITY_CRISIS" },
+  },
+  {
+    key: "away_for_a_week",
+    name: "AWAY A WEEK",      icon: "✈️",
+    desc: "Left the grow unattended — multiple issues compound without intervention",
+    slots: { early_veg: "ROOT_DROWN", late_veg: "OVERFEEDING", transition: "HEAT_WAVE" },
+  },
+  {
+    key: "root_rot_spiral",
+    name: "ROOT ROT SPIRAL",  icon: "🌊",
+    desc: "Chronic overwatering from seedling leads to progressive anaerobic root decay",
+    slots: { seedling: "ROOT_DROWN", early_veg: "ROOT_DROWN", late_veg: "ROOT_DROWN" },
+  },
+  {
+    key: "resin_run",
+    name: "RESIN RUN",        icon: "💎",
+    desc: "Intentional late push — controlled stress to maximise terpene and resin yield",
+    slots: { late_flower: "LATE_PUSH" },
+  },
+];
+
 // ── Sim engine ────────────────────────────────────────────────────────────────
-function computeGrow(baseTemp, baseRh, hazardSlots) {
+function computeGrow(baseTemp, baseRh, hazardSlots, allHazards = SIM_HAZARDS) {
   let health = 1.0;
   return SIM_STAGES.map(stage => {
     const hazardKey = hazardSlots[stage.key];
-    const hazard    = hazardKey ? SIM_HAZARDS.find(h => h.key === hazardKey) : null;
+    const hazard    = hazardKey ? allHazards.find(h => h.key === hazardKey) : null;
     const temp      = hazard ? hazard.temp : baseTemp;
     const rh        = hazard ? hazard.rh   : baseRh;
     const startH    = health;
@@ -363,13 +428,21 @@ export default function VPDCalculator() {
   const [showInfo, setShowInfo] = useState(false);
 
   // Hazard simulator state
-  const [simPhase,         setSimPhase]         = useState("setup");   // "setup"|"playing"|"results"
-  const [hazardSlots,      setHazardSlots]      = useState({});        // { stageKey: hazardKey }
+  const [simPhase,         setSimPhase]         = useState("setup");
+  const [hazardSlots,      setHazardSlots]      = useState({});
   const [simLog,           setSimLog]           = useState([]);
   const [simStageIdx,      setSimStageIdx]      = useState(0);
   const [runCount,         setRunCount]         = useState(0);
   const [freeChoice,       setFreeChoice]       = useState({});
   const [pickingHazardFor, setPickingHazardFor] = useState(null);
+  // Custom hazards (pro-locked)
+  const [isPro,            setIsPro]            = useState(false);
+  const [customHazards,    setCustomHazards]    = useState([]);
+  const [showCustomForm,   setShowCustomForm]   = useState(false);
+  const [cName,            setCName]            = useState("");
+  const [cTemp,            setCTemp]            = useState(30);
+  const [cRh,              setCRh]              = useState(40);
+  const [cDesc,            setCDesc]            = useState("");
 
   const vpd = useMemo(() => calcVPD(temp, rh), [temp, rh]);
   const { colour, label: statusLabel } = vpdStatus(vpd, stage);
@@ -388,6 +461,17 @@ export default function VPDCalculator() {
       targetIdeal: t.ideal,
     });
   }, [vpd, stage, temp, rh]);
+
+  useEffect(() => {
+    AsyncStorage.getItem("vyweed_subscription").then(raw => {
+      if (raw) { try { const d = JSON.parse(raw); setIsPro(d.plan === "max"); } catch {} }
+    });
+    AsyncStorage.getItem("vyweed_custom_hazards").then(raw => {
+      if (raw) { try { setCustomHazards(JSON.parse(raw)); } catch {} }
+    });
+  }, []);
+
+  const allHazards = [...SIM_HAZARDS, ...customHazards];
 
   const refTable = useMemo(() => {
     return [20, 22, 24, 26, 28, 30].map(t => {
@@ -602,7 +686,46 @@ export default function VPDCalculator() {
                 )}
               </View>
 
-              {/* Baseline conditions */}
+              {/* ── Scenario library ── */}
+              <Label style={{ marginBottom: 10 }}>SCENARIO LIBRARY</Label>
+              <Text style={{ color: C.greyLight, fontFamily: MONO, fontSize: 11, marginBottom: 10 }}>
+                Real grow crises — tap to load, then hit RUN
+              </Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}
+                style={{ marginBottom: 20 }} contentContainerStyle={{ gap: 8, paddingRight: 8 }}>
+                {SCENARIO_LIBRARY.map(sc => (
+                  <TouchableOpacity key={sc.key} onPress={() => {
+                    setHazardSlots({ ...sc.slots });
+                  }} style={{
+                    width: 160,
+                    backgroundColor: JSON.stringify(hazardSlots) === JSON.stringify(sc.slots)
+                      ? C.greenFaint : C.surface,
+                    borderRadius: 8, borderWidth: 1,
+                    borderColor: JSON.stringify(hazardSlots) === JSON.stringify(sc.slots)
+                      ? C.green : C.border,
+                    padding: 12,
+                  }}>
+                    <Text style={{ fontSize: 22, marginBottom: 6 }}>{sc.icon}</Text>
+                    <Text style={{ color: C.white, fontFamily: MONO, fontSize: 11,
+                      fontWeight: "bold", marginBottom: 4 }}>{sc.name}</Text>
+                    <Text style={{ color: C.greyLight, fontFamily: MONO, fontSize: 10,
+                      lineHeight: 15 }}>{sc.desc}</Text>
+                    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 3, marginTop: 8 }}>
+                      {Object.keys(sc.slots).map(stKey => {
+                        const haz = SIM_HAZARDS.find(h => h.key === sc.slots[stKey]);
+                        return haz ? (
+                          <Text key={stKey} style={{ fontFamily: MONO, fontSize: 9,
+                            color: severityColor(haz.severity) }}>
+                            {haz.icon}
+                          </Text>
+                        ) : null;
+                      })}
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+
+              {/* ── Baseline conditions ── */}
               <Label style={{ marginBottom: 10 }}>BASELINE CONDITIONS</Label>
               <NumInput label="BASELINE TEMP" value={temp}
                 onChange={setTemp} unit="°C" min={10} max={40} step={0.5} />
@@ -692,7 +815,7 @@ export default function VPDCalculator() {
                       NONE — no hazard
                     </Text>
                   </TouchableOpacity>
-                  {SIM_HAZARDS.map(haz => (
+                  {allHazards.map(haz => (
                     <TouchableOpacity key={haz.key} onPress={() => {
                       setHazardSlots(prev => ({ ...prev, [pickingHazardFor]: haz.key }));
                       setPickingHazardFor(null);
@@ -703,6 +826,9 @@ export default function VPDCalculator() {
                       <Text style={{ fontSize: 16 }}>{haz.icon}</Text>
                       <Text style={{ flex: 1, color: C.white, fontFamily: MONO, fontSize: 12 }}>
                         {haz.name}
+                        {haz.key.startsWith("CUSTOM_") && (
+                          <Text style={{ color: C.amber }}> — custom</Text>
+                        )}
                       </Text>
                       <Text style={{ color: severityColor(haz.severity),
                         fontFamily: MONO, fontSize: 10, textTransform: "uppercase" }}>
@@ -710,6 +836,84 @@ export default function VPDCalculator() {
                       </Text>
                     </TouchableOpacity>
                   ))}
+                  {/* Custom hazard entry */}
+                  {isPro ? (
+                    <TouchableOpacity onPress={() => { setShowCustomForm(true); setPickingHazardFor(null); }}
+                      style={{ flexDirection: "row", alignItems: "center",
+                        paddingVertical: 12, gap: 10, marginTop: 4 }}>
+                      <View style={{ width: 10, height: 10, borderRadius: 5,
+                        backgroundColor: C.amber }} />
+                      <Text style={{ color: C.amber, fontFamily: MONO, fontSize: 12 }}>
+                        + DEFINE CUSTOM HAZARD
+                      </Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <View style={{ paddingVertical: 10, flexDirection: "row",
+                      alignItems: "center", gap: 8, marginTop: 4 }}>
+                      <Text style={{ color: C.grey, fontFamily: MONO, fontSize: 11 }}>
+                        🔒  CUSTOM HAZARDS — IRL GROWER (MAX) ONLY
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              )}
+
+              {/* ── Custom hazard form (pro) ── */}
+              {showCustomForm && (
+                <View style={{ backgroundColor: C.card, borderRadius: 10,
+                  borderWidth: 1, borderColor: C.amber,
+                  padding: 16, marginBottom: 12 }}>
+                  <Text style={{ color: C.amber, fontFamily: MONO, fontSize: 12,
+                    letterSpacing: 1.5, marginBottom: 12 }}>DEFINE YOUR HAZARD</Text>
+                  <Text style={{ color: C.greyLight, fontFamily: MONO,
+                    fontSize: 10, marginBottom: 4 }}>NAME</Text>
+                  <View style={{ backgroundColor: C.surface, borderRadius: 6,
+                    borderWidth: 1, borderColor: C.border, marginBottom: 12 }}>
+                    <Text
+                      style={{ color: cName || C.grey, fontFamily: MONO,
+                        fontSize: 13, padding: 10 }}
+                      onPress={() => {}}
+                    >{cName || "e.g. BALLAST OVERHEATED"}</Text>
+                  </View>
+                  <NumInput label="HAZARD TEMP" value={cTemp}
+                    onChange={setCTemp} unit="°C" min={10} max={45} step={1} />
+                  <NumInput label="HAZARD RH" value={cRh}
+                    onChange={setCRh} unit="%" min={10} max={99} step={1} />
+                  <View style={{ flexDirection: "row", gap: 8, marginTop: 4 }}>
+                    <TouchableOpacity onPress={() => {
+                      if (!cName.trim()) return;
+                      const idx = customHazards.length;
+                      const newHaz = {
+                        key: `CUSTOM_${idx}`,
+                        name: cName.trim().toUpperCase(),
+                        icon: "⚙️",
+                        temp: cTemp,
+                        rh: cRh,
+                        growver: `Custom hazard — ${cTemp}°C / ${cRh}% RH — your real grow room conditions.`,
+                        cause: "User-defined hazard based on actual grow room readings.",
+                        effects: [`Temperature: ${cTemp}°C`, `Humidity: ${cRh}%`,
+                          `VPD: ~${calcVPD(cTemp, cRh).toFixed(2)} kPa`],
+                        fix: ["Adjust conditions to hit your stage target VPD range"],
+                        severity: calcVPD(cTemp, cRh) > 2.0 ? "critical" :
+                          calcVPD(cTemp, cRh) > 1.5 ? "high" : "medium",
+                      };
+                      const updated = [...customHazards, newHaz];
+                      setCustomHazards(updated);
+                      AsyncStorage.setItem("vyweed_custom_hazards", JSON.stringify(updated));
+                      setCName(""); setCTemp(30); setCRh(40);
+                      setShowCustomForm(false);
+                    }} style={{ flex: 1, paddingVertical: 12, backgroundColor: C.greenFaint,
+                      borderRadius: 8, borderWidth: 1, borderColor: C.green,
+                      alignItems: "center" }}>
+                      <Text style={{ color: C.green, fontFamily: MONO, fontSize: 12 }}>SAVE HAZARD</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => setShowCustomForm(false)}
+                      style={{ paddingHorizontal: 20, paddingVertical: 12, backgroundColor: C.surface,
+                        borderRadius: 8, borderWidth: 1, borderColor: C.border,
+                        alignItems: "center" }}>
+                      <Text style={{ color: C.greyLight, fontFamily: MONO, fontSize: 12 }}>CANCEL</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
               )}
 
@@ -717,7 +921,7 @@ export default function VPDCalculator() {
               <TouchableOpacity
                 disabled={!hasAnyHazard}
                 onPress={() => {
-                  const log = computeGrow(temp, rh, hazardSlots);
+                  const log = computeGrow(temp, rh, hazardSlots, allHazards);
                   setSimLog(log);
                   setSimStageIdx(0);
                   setFreeChoice({});
@@ -1045,7 +1249,7 @@ export default function VPDCalculator() {
                     setRunCount(r => r + 1);
                     setSimStageIdx(0);
                     setFreeChoice({});
-                    const log = computeGrow(temp, rh, hazardSlots);
+                    const log = computeGrow(temp, rh, hazardSlots, allHazards);
                     setSimLog(log);
                     setSimPhase("playing");
                   }} style={{ paddingVertical: 15, borderRadius: 10,
