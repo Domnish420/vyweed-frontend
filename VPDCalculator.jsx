@@ -540,7 +540,7 @@ export default function VPDCalculator() {
           </Text>
           <Label>VPD CALCULATOR</Label>
         </View>
-        <InfoBtn onPress={() => setShowInfo(true)} 
+        <InfoBtn onPress={() => setShowInfo(true)} />
       </View>
 
       {/* Stage selector */}
@@ -598,16 +598,16 @@ export default function VPDCalculator() {
               fontSize: 12, fontWeight: "bold", letterSpacing: 1 }}>
               kPa — {statusLabel}
             </Text>
-            <VPDGauge vpd={vpd} stage={stage} 
+            <VPDGauge vpd={vpd} stage={stage} />
             <Text style={{ color: C.grey, fontFamily: MONO, fontSize: 10, marginTop: 4 }}>
               TARGET {target.lo}–{target.hi} kPa (IDEAL {target.ideal})
             </Text>
           </View>
 
           <NumInput label="AIR TEMPERATURE" value={temp}
-            onChange={setTemp} unit="°C" min={10} max={40} step={0.5} 
+            onChange={setTemp} unit="°C" min={10} max={40} step={0.5} />
           <NumInput label="RELATIVE HUMIDITY" value={rh}
-            onChange={setRh} unit="%" min={10} max={100} step={1} 
+            onChange={setRh} unit="%" min={10} max={100} step={1} />
 
           {adjustmentTip && (
             <View style={{ backgroundColor: `${colour}15`, borderRadius: 6,
@@ -729,9 +729,9 @@ export default function VPDCalculator() {
               {/* ── Baseline conditions ── */}
               <Label style={{ marginBottom: 10 }}>BASELINE CONDITIONS</Label>
               <NumInput label="BASELINE TEMP" value={temp}
-                onChange={setTemp} unit="°C" min={10} max={40} step={0.5} 
+                onChange={setTemp} unit="°C" min={10} max={40} step={0.5} />
               <NumInput label="BASELINE RH" value={rh}
-                onChange={setRh} unit="%" min={10} max={100} step={1} 
+                onChange={setRh} unit="%" min={10} max={100} step={1} />
 
               {/* Stage hazard grid */}
               <Label style={{ marginBottom: 10 }}>ASSIGN HAZARDS TO STAGES</Label>
@@ -877,9 +877,9 @@ export default function VPDCalculator() {
                     >{cName || "e.g. BALLAST OVERHEATED"}</Text>
                   </View>
                   <NumInput label="HAZARD TEMP" value={cTemp}
-                    onChange={setCTemp} unit="°C" min={10} max={45} step={1} 
+                    onChange={setCTemp} unit="°C" min={10} max={45} step={1} />
                   <NumInput label="HAZARD RH" value={cRh}
-                    onChange={setCRh} unit="%" min={10} max={99} step={1} 
+                    onChange={setCRh} unit="%" min={10} max={99} step={1} />
                   <View style={{ flexDirection: "row", gap: 8, marginTop: 4 }}>
                     <TouchableOpacity onPress={() => {
                       if (!cName.trim()) return;
@@ -1000,7 +1000,7 @@ export default function VPDCalculator() {
                     stressLevel={1 - endHealth}
                     strainType="H"
                     tier="T2"
-                    strainSeed={42}
+                    strainSeed={42} />
                   
                 </View>
 
@@ -1176,7 +1176,7 @@ export default function VPDCalculator() {
                     stressLevel={1 - finalH}
                     strainType="H"
                     tier="T2"
-                    strainSeed={42}
+                    strainSeed={42} />
                   
                 </View>
 
@@ -1284,7 +1284,7 @@ export default function VPDCalculator() {
         </ScrollView>
       )}
 
-      <VPDInfoModal visible={showInfo} onClose={() => setShowInfo(false)} 
+      <VPDInfoModal visible={showInfo} onClose={() => setShowInfo(false)} />
     </View>
   );
 }

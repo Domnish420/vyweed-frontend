@@ -316,7 +316,7 @@ function ShelveModal({ strain, metal, visible, onComplete, onSkipAd, strainType 
               strainType={strainType || "H"}
               tier={strain?.tier || "T4"}
               strainSeed={strain?.id || 1}
-            
+            />
             <Animated.View style={{
               position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
               borderRadius: 100, backgroundColor: `${m.colour}0c`, opacity: glowAnim,
@@ -487,7 +487,7 @@ function TrophyCollection({ trophies, onBack }) {
                   strainType={sType}
                   tier={item.tier}
                   strainSeed={item.strainId}
-                
+                />
                 {/* Info strip */}
                 <View style={{
                   flex: 1, alignItems: "center", justifyContent: "center",
@@ -506,7 +506,7 @@ function TrophyCollection({ trophies, onBack }) {
                 </View>
               </View>
             );
-          }}
+          }} />
         
       )}
     </View>
@@ -853,7 +853,7 @@ export default function VirtualGrow({ trophies, onAddTrophy, tokens, onSpendToke
   if (loading) {
     return (
       <View style={{ flex: 1, backgroundColor: C.bg, alignItems: "center", justifyContent: "center" }}>
-        <ActivityIndicator color={C.green} size="large" 
+        <ActivityIndicator color={C.green} size="large" />
         <Text style={{ color: C.grey, fontFamily: SANS, fontSize: 13, marginTop: 14, letterSpacing: 1 }}>
           Rolling your next strain...
         </Text>
@@ -1008,7 +1008,7 @@ export default function VirtualGrow({ trophies, onAddTrophy, tokens, onSpendToke
               setTimerRemaining(0);
               if (timerRef.current) clearInterval(timerRef.current);
               loadNextStrain();
-            }}
+            }} />
           
         ) : (
           <View style={{ alignItems: "center", paddingVertical: 4 }} {...panResponder.panHandlers}>
@@ -1021,7 +1021,7 @@ export default function VirtualGrow({ trophies, onAddTrophy, tokens, onSpendToke
                 tier={strain.tier}
                 strainSeed={strain.id}
                 day={day}
-                totalDays={totalDays}
+                totalDays={totalDays} />
               
             </Animated.View>
             <Text style={{ color: C.grey, fontFamily: SANS, fontSize: 10, marginTop: 2, letterSpacing: 1 }}>
@@ -1203,7 +1203,7 @@ export default function VirtualGrow({ trophies, onAddTrophy, tokens, onSpendToke
                 {strain.aroma}
               </Text>
             </View>
-          <
+          </>
         )}
       </ScrollView>
 
@@ -1226,7 +1226,7 @@ export default function VirtualGrow({ trophies, onAddTrophy, tokens, onSpendToke
           setShowShelve(false);
           loadNextStrain();     // load next strain right away
         }}
-      
+      />
     </View>
   );
 }

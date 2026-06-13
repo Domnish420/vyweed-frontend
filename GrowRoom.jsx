@@ -295,10 +295,10 @@ function StrainPickerModal({ visible, onClose, onSelect }) {
               borderRadius: 12, borderWidth: 1, borderColor: C.border,
               color: C.white, fontFamily: SANS, fontSize: 14, paddingHorizontal: 14, paddingVertical: 11,
             }}
-          
+          />
 
           {searching && <ActivityIndicator color={C.green} style={{ marginVertical: 12 }} />}
-
+         />
           <FlatList
             data={results} keyExtractor={s => String(s.id)}
             contentContainerStyle={{ paddingHorizontal: 14, paddingBottom: 24 }}
@@ -326,7 +326,7 @@ function StrainPickerModal({ visible, onClose, onSelect }) {
                   No results for "{query}"
                 </Text>
               : null}
-          
+          />
         </View>
       </View>
     </Modal>
@@ -569,7 +569,7 @@ export default function GrowRoom({ trophies, onAddTrophy, tokens, onEarnToken, o
   if (loadingGrow) {
     return (
       <View style={{ flex: 1, backgroundColor: C.bg, alignItems: "center", justifyContent: "center" }}>
-        <ActivityIndicator color={C.green} size="large" 
+        <ActivityIndicator color={C.green} size="large" />
       </View>
     );
   }
@@ -582,7 +582,7 @@ export default function GrowRoom({ trophies, onAddTrophy, tokens, onEarnToken, o
           visible={pickerVisible}
           onClose={() => setPickerVisible(false)}
           onSelect={(strain) => { startGrow(strain); setPickerVisible(false); }}
-        
+        />
         <SeedTray
           trophies={trophies}
           outdoorWeather={null}
@@ -590,7 +590,7 @@ export default function GrowRoom({ trophies, onAddTrophy, tokens, onEarnToken, o
           onSelectStrain={startGrow}
           onBack={() => setShowSeedTray(false)}
           onSearchAll={() => setPickerVisible(true)}
-        
+        />
       </View>
     );
   }
@@ -610,7 +610,7 @@ export default function GrowRoom({ trophies, onAddTrophy, tokens, onEarnToken, o
               <Text style={{ color: C.greyLight, fontFamily: SANS, fontSize: 13, marginTop: 10, textAlign: "center", lineHeight: 20 }}>
                 {growData?.strainData?.name} is drying.{"\n"}Ready to start your next indoor grow?
               </Text>
-            <
+            </>
           ) : (
             <>
               <Text style={{ color: C.white, fontFamily: HEADING, fontSize: 30, letterSpacing: 2, textAlign: "center" }}>
@@ -619,9 +619,9 @@ export default function GrowRoom({ trophies, onAddTrophy, tokens, onEarnToken, o
               <Text style={{ color: C.greyLight, fontFamily: SANS, fontSize: 13, marginTop: 10, textAlign: "center", lineHeight: 20 }}>
                 Fully controlled indoor environment.{"\n"}No seasons. No weather. Pure precision growing.
               </Text>
-            <
+            </>
           )}
-
+          />
           <TouchableOpacity
             onPress={() => setShowSeedTray(true)}
             style={{
@@ -714,10 +714,10 @@ export default function GrowRoom({ trophies, onAddTrophy, tokens, onEarnToken, o
         visible={weekRewardVisible} week={weekRewardNum}
         strain={weekRewardStrain} metal={weekRewardMetal}
         onClose={() => setWeekRewardVisible(false)}
-      
+      />
       <HarvestModal
         strain={growData?.strainData} metal={metal}
-        visible={harvestModalVisible} onPlantAgain={clearAndRestart}
+        visible={harvestModalVisible} onPlantAgain={clearAndRestart} />
       
 
       <ScrollView contentContainerStyle={{ paddingBottom: 48 }}>
@@ -793,7 +793,7 @@ export default function GrowRoom({ trophies, onAddTrophy, tokens, onEarnToken, o
             strainSeed={growData.strainData.id}
             day={currentDay}
             totalDays={totalDays}
-          
+            />
           <Text style={{ color: C.grey, fontFamily: SANS, fontSize: 9, marginTop: 4, letterSpacing: 1.5 }}>
             {isHarvest ? "✂️ HARVEST READY" : "🏠 GROW ROOM · CONTROLLED"}
           </Text>
