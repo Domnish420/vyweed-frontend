@@ -283,9 +283,9 @@ function StrainPickerModal({ visible, onClose, onSelect }) {
 
           {/* Divider */}
           <View style={{ flexDirection: "row", alignItems: "center", marginHorizontal: 14, marginBottom: 8 }}>
-            <View style={{ flex: 1, height: 1, backgroundColor: C.border }} 
+            <View style={{ flex: 1, height: 1, backgroundColor: C.border }} />
             <Text style={{ color: C.grey, fontFamily: SANS, fontSize: 10, marginHorizontal: 10 }}>OR SEARCH</Text>
-            <View style={{ flex: 1, height: 1, backgroundColor: C.border }} 
+            <View style={{ flex: 1, height: 1, backgroundColor: C.border }} />
           </View>
 
           {/* Search input */}
@@ -895,7 +895,7 @@ export default function RTLGrow({ trophies, onAddTrophy, tokens, onEarnToken, on
               width: `${progressPct}%`, height: 3,
               backgroundColor: isHarvest ? "#ffd700" : C.green,
               borderRadius: 2,
-            }} 
+            }} />
           </View>
           <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 6 }}>
             <Text style={{ color: C.grey, fontFamily: SANS, fontSize: 9 }}>

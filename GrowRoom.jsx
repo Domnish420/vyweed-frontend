@@ -282,9 +282,9 @@ function StrainPickerModal({ visible, onClose, onSelect }) {
           </TouchableOpacity>
 
           <View style={{ flexDirection: "row", alignItems: "center", marginHorizontal: 14, marginBottom: 8 }}>
-            <View style={{ flex: 1, height: 1, backgroundColor: C.border }} 
+            <View style={{ flex: 1, height: 1, backgroundColor: C.border }} />
             <Text style={{ color: C.grey, fontFamily: SANS, fontSize: 10, marginHorizontal: 10 }}>OR SEARCH</Text>
-            <View style={{ flex: 1, height: 1, backgroundColor: C.border }} 
+            <View style={{ flex: 1, height: 1, backgroundColor: C.border }} />
           </View>
 
           <TextInput
@@ -769,7 +769,7 @@ export default function GrowRoom({ trophies, onAddTrophy, tokens, onEarnToken, o
             <View style={{
               width: `${progressPct}%`, height: 3,
               backgroundColor: isHarvest ? "#ffd700" : C.purple, borderRadius: 2,
-            }} 
+            }} />
           </View>
           <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 6 }}>
             <Text style={{ color: C.grey, fontFamily: SANS, fontSize: 9 }}>{progressPct.toFixed(0)}% COMPLETE</Text>

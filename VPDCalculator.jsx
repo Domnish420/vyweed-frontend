@@ -362,7 +362,7 @@ function VPDInfoModal({ visible, onClose }) {
         <View style={{ backgroundColor: C.card, borderTopLeftRadius: 20,
           borderTopRightRadius: 20, borderTopWidth: 2, borderColor: C.green, maxHeight: "90%" }}>
           <View style={{ alignItems: "center", paddingTop: 10, paddingBottom: 4 }}>
-            <View style={{ width: 40, height: 4, backgroundColor: C.border, borderRadius: 2 }} 
+            <View style={{ width: 40, height: 4, backgroundColor: C.border, borderRadius: 2 }} />
           </View>
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between",
             paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: 1, borderColor: C.border }}>
@@ -811,7 +811,7 @@ export default function VPDCalculator() {
                   }} style={{ flexDirection: "row", alignItems: "center",
                     paddingVertical: 10, borderBottomWidth: 1, borderColor: C.border, gap: 10 }}>
                     <View style={{ width: 10, height: 10, borderRadius: 5,
-                      backgroundColor: C.grey }} 
+                      backgroundColor: C.grey }} />
                     <Text style={{ color: C.greyLight, fontFamily: MONO, fontSize: 12 }}>
                       NONE — no hazard
                     </Text>
@@ -823,7 +823,7 @@ export default function VPDCalculator() {
                     }} style={{ flexDirection: "row", alignItems: "center",
                       paddingVertical: 10, borderBottomWidth: 1, borderColor: C.border, gap: 10 }}>
                       <View style={{ width: 10, height: 10, borderRadius: 5,
-                        backgroundColor: severityColor(haz.severity) }} 
+                        backgroundColor: severityColor(haz.severity) }} />
                       <Text style={{ fontSize: 16 }}>{haz.icon}</Text>
                       <Text style={{ flex: 1, color: C.white, fontFamily: MONO, fontSize: 12 }}>
                         {haz.name}
@@ -843,7 +843,7 @@ export default function VPDCalculator() {
                       style={{ flexDirection: "row", alignItems: "center",
                         paddingVertical: 12, gap: 10, marginTop: 4 }}>
                       <View style={{ width: 10, height: 10, borderRadius: 5,
-                        backgroundColor: C.amber }} 
+                        backgroundColor: C.amber }} />
                       <Text style={{ color: C.amber, fontFamily: MONO, fontSize: 12 }}>
                         + DEFINE CUSTOM HAZARD
                       </Text>
@@ -986,7 +986,7 @@ export default function VPDCalculator() {
                 <View style={{ height: 4, backgroundColor: C.surface,
                   borderRadius: 2, overflow: "hidden", marginBottom: 16 }}>
                   <View style={{ width: `${progressPct}%`, height: 4,
-                    backgroundColor: C.greenDim, borderRadius: 2 }} 
+                    backgroundColor: C.greenDim, borderRadius: 2 }} />
                 </View>
 
                 {/* Plant visual */}
@@ -1010,7 +1010,7 @@ export default function VPDCalculator() {
                   <View style={{ height: 10, backgroundColor: C.surface,
                     borderRadius: 5, overflow: "hidden", marginBottom: 6 }}>
                     <View style={{ width: `${healthPct}%`, height: 10,
-                      backgroundColor: hc, borderRadius: 5 }} 
+                      backgroundColor: hc, borderRadius: 5 }} />
                   </View>
                   <Text style={{ fontFamily: MONO, fontSize: 13,
                     fontWeight: "bold", color: hc }}>
@@ -1209,7 +1209,7 @@ export default function VPDCalculator() {
                       <View style={{ flex: 1, height: 7, backgroundColor: C.surface,
                         borderRadius: 4, overflow: "hidden" }}>
                         <View style={{ width: `${ehPct}%`, height: 7,
-                          backgroundColor: ehc, borderRadius: 4 }} 
+                          backgroundColor: ehc, borderRadius: 4 }} />
                       </View>
                       <Text style={{ fontFamily: MONO, fontSize: 11,
                         color: ehc, width: 36, textAlign: "right" }}>
