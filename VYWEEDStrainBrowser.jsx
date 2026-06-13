@@ -40,6 +40,15 @@ import { getApiV1, BACKEND_HEADERS } from "./apiConfig";
 import PlantRenderer from "./PlantRenderer";
 let PlantRenderer3D = null;
 try { PlantRenderer3D = require("./PlantRenderer3D").default; } catch (_) {}
+
+class Plant3DGuard extends React.Component {
+  state = { crashed: false };
+  static getDerivedStateFromError() { return { crashed: true }; }
+  render() {
+    if (this.state.crashed) return this.props.fallback;
+    return this.props.children;
+  }
+}
 const API_BASE = { toString: () => getApiV1() };
 // All `${API_BASE}` usages will now call getApiV1() at interpolation time.
 
@@ -201,14 +210,19 @@ function StrainStage({ colour, height = 240, strainId, strainType, strainTier })
       <Bracket pos="tl" /><Bracket pos="tr" /><Bracket pos="bl" /><Bracket pos="br" />
       <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
         {PlantRenderer3D ? (
-          <PlantRenderer3D
-            width={SW - 32}
-            height={height - 16}
-            stage="Harvest Ready"
-            strainType={sType}
-            tier={sTier}
-            strainSeed={sId}
-          />
+          <Plant3DGuard fallback={
+            <PlantRenderer width={SW - 32} height={height - 16}
+              stage="Harvest Ready" strainType={sType} tier={sTier} strainSeed={sId} />
+          }>
+            <PlantRenderer3D
+              width={SW - 32}
+              height={height - 16}
+              stage="Harvest Ready"
+              strainType={sType}
+              tier={sTier}
+              strainSeed={sId}
+            />
+          </Plant3DGuard>
         ) : (
           <PlantRenderer
             width={SW - 32}
@@ -1547,8 +1561,8 @@ function StrainDetailScreen({ strainId, onBack, onStartGrow, onNavigateToStrain 
               {/* Mini split bar */}
               <View style={{ flexDirection: "row", height: 6, width: "100%",
                 marginTop: 6, borderRadius: 3, overflow: "hidden" }}>
-                <View style={{ flex: data.indica_pct, backgroundColor: C.purple }} />
-                <View style={{ flex: data.sativa_pct, backgroundColor: C.green }} />
+                <View style={{ flex: data.indica_pct ?? 50, backgroundColor: C.purple }} />
+                <View style={{ flex: data.sativa_pct ?? 50, backgroundColor: C.green }} />
               </View>
             </View>
           </View>
@@ -1590,7 +1604,7 @@ function StrainDetailScreen({ strainId, onBack, onStartGrow, onNavigateToStrain 
         )}
 
         {/* Terpenes */}
-        {data.terpenes?.length > 0 && (
+        {Array.isArray(data.terpenes) && data.terpenes.length > 0 && (
           <View style={{
             backgroundColor: C.card, borderRadius: 8,
             borderWidth: 1, borderColor: C.border,
