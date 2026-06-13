@@ -28,7 +28,8 @@ import { setGrowverContext } from "./growverContext";
 import PlantRenderer from "./PlantRenderer";
 
 const { width: SW } = Dimensions.get("window");
-import { API_V1 as API_BASE } from "./apiConfig";
+import { getApiV1 } from "./apiConfig";
+const API_BASE = { toString: () => getApiV1() };
 
 const TOTAL_STRAINS = 5042;
 const PAGE_SIZE     = 100;

@@ -11,7 +11,8 @@ import {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { cachedFetch } from "./cache";
 import { setGrowverContext } from "./growverContext";
-import { API_V1 as API_BASE } from "./apiConfig";
+import { getApiV1 } from "./apiConfig";
+const API_BASE = { toString: () => getApiV1() };
 import SeedTray from "./SeedTray";
 import PlantRenderer from "./PlantRenderer";
 import DailyCarePanel from "./DailyCarePanel";

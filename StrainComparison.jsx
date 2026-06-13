@@ -12,7 +12,8 @@ import {
 } from "react-native";
 import { cachedFetch } from "./cache";
 
-import { API_V1 as API_BASE } from "./apiConfig";
+import { getApiV1 } from "./apiConfig";
+const API_BASE = { toString: () => getApiV1() };
 const MONO = Platform.select({ ios: "Courier New", android: "monospace" });
 
 const C = {
