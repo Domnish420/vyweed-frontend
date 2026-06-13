@@ -95,8 +95,9 @@ const SIM_STAGES = [
   { key: "early_veg",    label: "EARLY VEG",    dayRange: "Days 8–21",  rendStage: "Vegetative",   vpds: "Vegetative",   totalDays: 14 },
   { key: "late_veg",     label: "LATE VEG",     dayRange: "Days 22–35", rendStage: "Vegetative",   vpds: "Vegetative",   totalDays: 14 },
   { key: "transition",   label: "TRANSITION",   dayRange: "Days 36–49", rendStage: "Transition",   vpds: "Pre-Flower",   totalDays: 14 },
-  { key: "early_flower", label: "EARLY FLOWER", dayRange: "Days 50–65", rendStage: "Early Flower", vpds: "Flowering",    totalDays: 16 },
-  { key: "mid_flower",   label: "MID FLOWER",   dayRange: "Days 66–77", rendStage: "Mid Flower",   vpds: "Flowering",    totalDays: 12 },
+  { key: "early_flower", label: "EARLY FLOWER", dayRange: "Days 50–58", rendStage: "Early Flower", vpds: "Flowering",    totalDays: 9  },
+  { key: "bud_swell",   label: "BUD SWELL",    dayRange: "Days 59–65", rendStage: "Bud Swell",    vpds: "Flowering",    totalDays: 7  },
+  { key: "mid_flower",  label: "MID FLOWER",   dayRange: "Days 66–77", rendStage: "Mid Flower",   vpds: "Flowering",    totalDays: 12 },
   { key: "late_flower",  label: "LATE FLOWER",  dayRange: "Days 78–91", rendStage: "Late Flower",  vpds: "Late Flower",  totalDays: 14 },
 ];
 

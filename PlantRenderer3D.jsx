@@ -38,6 +38,7 @@ const STAGE_PRESET = {
   "Vegetative":    { hPct: 0.55, bud: 0.00, trich: 0.00, fade: 0.00, pist: 0.00 },
   "Transition":    { hPct: 0.82, bud: 0.07, trich: 0.00, fade: 0.00, pist: 0.28 },
   "Early Flower":  { hPct: 0.90, bud: 0.30, trich: 0.14, fade: 0.00, pist: 0.90 },
+  "Bud Swell":     { hPct: 0.91, bud: 0.48, trich: 0.28, fade: 0.02, pist: 0.78 },
   "Mid Flower":    { hPct: 0.92, bud: 0.65, trich: 0.44, fade: 0.10, pist: 0.65 },
   "Late Flower":   { hPct: 0.94, bud: 0.88, trich: 0.80, fade: 0.40, pist: 0.38 },
   "Final Days":    { hPct: 0.95, bud: 0.97, trich: 0.94, fade: 0.65, pist: 0.18 },
@@ -49,6 +50,7 @@ const STAGE_KEYFRAMES = [
   { t: 0.10, ...STAGE_PRESET["Vegetative"] },
   { t: 0.32, ...STAGE_PRESET["Transition"] },
   { t: 0.46, ...STAGE_PRESET["Early Flower"] },
+  { t: 0.54, ...STAGE_PRESET["Bud Swell"] },
   { t: 0.62, ...STAGE_PRESET["Mid Flower"] },
   { t: 0.78, ...STAGE_PRESET["Late Flower"] },
   { t: 0.95, ...STAGE_PRESET["Final Days"] },
@@ -84,7 +86,7 @@ const STRAIN_SHAPE = {
 
 const STAGE_DAY_EST = {
   Seedling: 4, Vegetative: 18, Transition: 35,
-  "Early Flower": 52, "Mid Flower": 62, "Late Flower": 77,
+  "Early Flower": 52, "Bud Swell": 58, "Mid Flower": 66, "Late Flower": 78,
   "Final Days": 88, "Harvest Ready": 91,
 };
 

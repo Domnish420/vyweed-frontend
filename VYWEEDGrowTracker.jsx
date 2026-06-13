@@ -360,7 +360,7 @@ function GrowStageBar({ stage, day, daysToHarvest }) {
     "Seedling": 0, "seedling": 0,
     "Vegetative": 1, "vegetative": 1, "Early Vegetative": 1, "Late Vegetative": 1,
     "Pre-Flower": 2, "Transition": 2, "transition": 2,
-    "Flowering": 3, "Early Flower": 3, "Mid Flower": 3, "Late Flower": 3,
+    "Flowering": 3, "Early Flower": 3, "Bud Swell": 3, "Mid Flower": 3, "Late Flower": 3,
     "flowering": 3, "early flower": 3,
     "Harvest": 4, "Harvest Ready": 4,
   };
