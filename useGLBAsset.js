@@ -3,17 +3,17 @@ import { useState, useEffect, useRef } from "react";
 import * as FileSystem from "expo-file-system/legacy";
 
 const RELEASE_BASE =
-  "https://github.com/domnish420/vyweed-frontend/releases/download/v0.1-assets";
+  "https://github.com/Domnish420/vyweed-frontend/releases/download/v0.1-assets";
 
-// File names must match exactly what you uploaded to the GitHub Release.
+// File names match the assets uploaded to the GitHub Release.
 const STAGE_FILES = {
   Seedling:        "seedling.glb",
-  Vegetative:      "early_veg.glb",
-  Transition:      "late_veg.glb",
-  "Early Flower":  "pre_flower.glb",
-  "Bud Swell":     "early_flower.glb",
-  "Mid Flower":    "bud_swell.glb",
-  "Late Flower":   "mid_flower.glb",
+  Vegetative:      "vegetative.glb",
+  Transition:      "transition.glb",
+  "Early Flower":  "early_flower.glb",
+  "Bud Swell":     "bud_swell.glb",
+  "Mid Flower":    "mid_flower.glb",
+  "Late Flower":   "late_flower.glb",
   "Final Days":    "late_flower.glb",
   "Harvest Ready": "harvest_ready.glb",
 };
