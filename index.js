@@ -1,3 +1,8 @@
+// Three.js GLTFLoader checks navigator.userAgent but React Native leaves it undefined.
+if (typeof navigator !== 'undefined' && navigator.userAgent == null) {
+  navigator.userAgent = 'ReactNative/Hermes';
+}
+
 import { registerRootComponent } from 'expo';
 
 import App from './App';
