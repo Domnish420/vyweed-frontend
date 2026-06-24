@@ -274,10 +274,11 @@ function GLBViewer({ width, height, localUri, strainConfig, interactive = false 
       renderer.setSize(W, H);
       renderer.setPixelRatio(1);
       renderer.setClearColor(0x000000, 0);
-      // expo-gl WebGL1 lacks EXT_sRGB so outputColorSpace conversion doesn't
-      // round-trip. Leave output as linear and use Reinhard to compress HDR.
+      // outputColorSpace is implemented in pure GLSL (no EXT_sRGB extension
+      // needed) so it works correctly in expo-gl WebGL1.
+      renderer.outputColorSpace    = THREE.SRGBColorSpace;
       renderer.toneMapping         = THREE.ReinhardToneMapping;
-      renderer.toneMappingExposure = 1.8;
+      renderer.toneMappingExposure = 1.2;
 
       const scene  = new THREE.Scene();
       const lookAt = new THREE.Vector3(0, 1.85, 0);
@@ -285,15 +286,13 @@ function GLBViewer({ width, height, localUri, strainConfig, interactive = false 
       camera.position.set(0, 1.85, cameraZRef.current);
       camera.lookAt(lookAt);
 
-      // PBR textures have low linear albedo (~0.05–0.2) so lights need to be
-      // much brighter than for solid-colour materials.
-      const hemi = new THREE.HemisphereLight(0x9fd8ff, 0x4a7c40, 4.0);
+      const hemi = new THREE.HemisphereLight(0x9fd8ff, 0x4a7c40, 2.0);
       scene.add(hemi);
-      const key = new THREE.DirectionalLight(0xfffaf0, 8.0);
+      const key = new THREE.DirectionalLight(0xfffaf0, 5.0);
       key.position.set(-2.5, 4, 3); scene.add(key);
-      const fill = new THREE.DirectionalLight(0xd0e8ff, 3.0);
+      const fill = new THREE.DirectionalLight(0xd0e8ff, 1.5);
       fill.position.set(3, 1, 2); scene.add(fill);
-      const rim = new THREE.DirectionalLight(0x88ffcc, 1.0);
+      const rim = new THREE.DirectionalLight(0x88ffcc, 0.6);
       rim.position.set(0, -1, -3); scene.add(rim);
 
       await loadGLBIntoScene(localUri, scene, strainConfig);
