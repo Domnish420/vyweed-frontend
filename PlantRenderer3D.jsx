@@ -32,8 +32,10 @@ async function loadGLBIntoScene(localUri, scene, targetHeight = 3.5) {
   const b64 = await FileSystem.readAsStringAsync(localUri, {
     encoding: FileSystem.EncodingType.Base64,
   });
-  const buf = Buffer.from(b64, "base64");
-  const arrayBuffer = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
+  const binaryStr = atob(b64);
+  const bytes = new Uint8Array(binaryStr.length);
+  for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
+  const arrayBuffer = bytes.buffer;
   await new Promise((resolve, reject) => {
     const loader = new GLTFLoader();
     loader.setDRACOLoader(_dracoLoader);
