@@ -30,14 +30,8 @@ function makeCanvasPolyfill(W, H) {
 async function loadGLBIntoScene(localUri, scene, targetHeight = 3.5) {
   console.log("[3D] loadGLBIntoScene start, GLTFLoader=", !!GLTFLoader);
   if (!GLTFLoader) throw new Error("GLTFLoader unavailable");
-  const b64 = await FileSystem.readAsStringAsync(localUri, {
-    encoding: FileSystem.EncodingType.Base64,
-  });
-  console.log("[3D] b64 length=", b64.length);
-  const binaryStr = atob(b64);
-  const bytes = new Uint8Array(binaryStr.length);
-  for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
-  const arrayBuffer = bytes.buffer;
+  const response = await fetch(localUri);
+  const arrayBuffer = await response.arrayBuffer();
   console.log("[3D] arrayBuffer byteLength=", arrayBuffer.byteLength);
   await new Promise((resolve, reject) => {
     const loader = new GLTFLoader();
@@ -142,9 +136,20 @@ function GLBViewer({ width, height, localUri }) {
       const animate = () => {
         if (!running || !mountedRef.current) return;
         frameId = requestAnimationFrame(animate);
-        plantGroup.rotation.y += 0.007;
-        renderer.render(scene, camera);
-        gl.endFrameEXP();
+        try {
+          plantGroup.rotation.y += 0.007;
+          renderer.render(scene, camera);
+          gl.endFrameEXP();
+        } catch (renderErr) {
+          running = false;
+          console.error("[3D] render error:", renderErr?.message, renderErr?.stack);
+          if (frameId != null) cancelAnimationFrame(frameId);
+          try { renderer.dispose(); } catch (_) {}
+          if (mountedRef.current) {
+            setFailed(true);
+            setGlErr((renderErr?.message || String(renderErr)).slice(0, 60));
+          }
+        }
       };
       animate();
 
