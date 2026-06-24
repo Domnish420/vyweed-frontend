@@ -10,6 +10,8 @@ import { GLView } from "expo-gl";
 import * as THREE from "three";
 import useGLBAsset from "./useGLBAsset";
 import { RNDRACOLoader } from "./RNDRACOLoader";
+import { extractGLBTextures } from "./extractGLBTextures";
+import { getStrainConfig } from "./STRAIN_CONFIG";
 
 let GLTFLoader = null;
 try {
@@ -29,37 +31,133 @@ function makeCanvasPolyfill(W, H) {
   };
 }
 
-async function loadGLBIntoScene(localUri, scene, targetHeight = 3.5) {
+// Build a Three.js Texture from a local file URI.
+// expo-gl's texImage2D understands { uri } objects natively.
+// Mipmaps are disabled — expo-gl + mobile = linear filtering is fine.
+function makeTexture(uri) {
+  const tex = new THREE.Texture();
+  tex.image          = { uri };
+  tex.flipY          = false;          // GLTF spec: V=0 is bottom of image
+  tex.generateMipmaps = false;
+  tex.minFilter      = THREE.LinearFilter;
+  tex.needsUpdate    = true;
+  return tex;
+}
+
+// Apply PBR textures from a GLTF material JSON onto an existing Three.js material.
+// textureURIs maps image index → local file path.
+function applyGLTFTextures(threeMat, jsonMat, gltfTextures, textureURIs) {
+  function getURI(texIndex) {
+    if (texIndex == null) return null;
+    const tex = gltfTextures[texIndex];
+    return tex != null ? textureURIs[tex.source] : null;
+  }
+
+  const pbr = jsonMat.pbrMetallicRoughness || {};
+
+  const baseUri = getURI(pbr.baseColorTexture?.index);
+  if (baseUri) {
+    threeMat.map = makeTexture(baseUri);
+    const f = pbr.baseColorFactor;
+    threeMat.color.setRGB(f ? f[0] : 1, f ? f[1] : 1, f ? f[2] : 1);
+  }
+
+  const normalUri = getURI(jsonMat.normalTexture?.index);
+  if (normalUri) threeMat.normalMap = makeTexture(normalUri);
+
+  const mrUri = getURI(pbr.metallicRoughnessTexture?.index);
+  if (mrUri) {
+    threeMat.metalnessMap = makeTexture(mrUri);
+    threeMat.roughnessMap = makeTexture(mrUri);
+  }
+
+  const occUri = getURI(jsonMat.occlusionTexture?.index);
+  if (occUri) threeMat.aoMap = makeTexture(occUri);
+
+  const emissUri = getURI(jsonMat.emissiveTexture?.index);
+  if (emissUri) {
+    threeMat.emissiveMap = makeTexture(emissUri);
+    threeMat.emissive    = new THREE.Color(1, 1, 1);
+  }
+
+  if (pbr.roughnessFactor != null) threeMat.roughness = pbr.roughnessFactor;
+  if (pbr.metallicFactor  != null) threeMat.metalness = pbr.metallicFactor;
+
+  threeMat.side       = THREE.DoubleSide;
+  threeMat.needsUpdate = true;
+}
+
+async function loadGLBIntoScene(localUri, scene, strainConfig, targetHeight = 3.5) {
   if (!GLTFLoader) throw new Error("GLTFLoader unavailable");
-  const response = await fetch(localUri);
+
+  const response    = await fetch(localUri);
   const arrayBuffer = await response.arrayBuffer();
+
+  // Extract embedded textures to local files (RN Blob can't handle ArrayBuffer).
+  // Results are cached by filename — fast on repeat visits.
+  const cacheKey = localUri.split("/").pop().replace(/\.glb$/i, "");
+  const { gltfJson, textureURIs } = await extractGLBTextures(arrayBuffer, cacheKey);
+  const hasTextures = Object.keys(textureURIs).length > 0;
+
   await new Promise((resolve, reject) => {
     const loader = new GLTFLoader();
     loader.setDRACOLoader(_dracoLoader);
     loader.parse(arrayBuffer, "", (gltf) => {
       const model = gltf.scene;
+
+      // Scale to target height, apply strain-specific aspect ratio
       const box    = new THREE.Box3().setFromObject(model);
       const size   = box.getSize(new THREE.Vector3());
       const center = box.getCenter(new THREE.Vector3());
       const maxDim = Math.max(size.x, size.y, size.z);
+
       if (maxDim > 0) {
-        const scale = targetHeight / maxDim;
-        model.scale.setScalar(scale);
-        model.position.x = -center.x * scale;
-        model.position.y = (-center.y + size.y * 0.5) * scale + 0.1;
-        model.position.z = -center.z * scale;
+        const base   = targetHeight / maxDim;
+        const scaleY = base * (strainConfig.scaleY   ?? 1.0);
+        const scaleH = base * (strainConfig.scaleXZ  ?? 1.0);
+        model.scale.set(scaleH, scaleY, scaleH);
+        model.position.x = -center.x * scaleH;
+        model.position.y = (-center.y + size.y * 0.5) * scaleY + 0.1;
+        model.position.z = -center.z * scaleH;
       }
-      // React Native Blob can't load GLB-embedded textures — solid plant materials.
-      const leafMat = new THREE.MeshStandardMaterial({ color: 0x2d7a27, roughness: 0.85, metalness: 0.0,  side: THREE.DoubleSide });
-      const stemMat = new THREE.MeshStandardMaterial({ color: 0x4a7c40, roughness: 0.9,  metalness: 0.0,  side: THREE.DoubleSide });
-      const budMat  = new THREE.MeshStandardMaterial({ color: 0x8fbc45, roughness: 0.7,  metalness: 0.05, side: THREE.DoubleSide });
-      model.traverse((node) => {
-        if (!node.isMesh) return;
-        const n = (node.name || '').toLowerCase();
-        if (n.includes('bud') || n.includes('flower') || n.includes('calyx')) node.material = budMat;
-        else if (n.includes('stem') || n.includes('branch') || n.includes('trunk')) node.material = stemMat;
-        else node.material = leafMat;
-      });
+
+      if (hasTextures) {
+        // ── Textured path: map GLTF JSON materials → Three.js materials by name ──
+        const gltfMats = gltfJson.materials || [];
+        const matsByName = {};
+        gltfMats.forEach((m) => { matsByName[m.name || ""] = m; });
+        const gltfTextures = gltfJson.textures || [];
+
+        model.traverse((node) => {
+          if (!node.isMesh) return;
+          const mats = Array.isArray(node.material) ? node.material : [node.material];
+          mats.forEach((mat) => {
+            const jsonMat = matsByName[mat.name];
+            if (jsonMat) {
+              applyGLTFTextures(mat, jsonMat, gltfTextures, textureURIs);
+            } else {
+              // No name match — tint with strain leaf color as a safe fallback
+              mat.color.setHex(strainConfig.leafColor);
+              mat.side = THREE.DoubleSide;
+              mat.needsUpdate = true;
+            }
+          });
+        });
+      } else {
+        // ── Solid-color path: heuristic by mesh name ──────────────────────────
+        const leafMat = new THREE.MeshStandardMaterial({ color: strainConfig.leafColor, roughness: 0.85, metalness: 0.0,  side: THREE.DoubleSide });
+        const stemMat = new THREE.MeshStandardMaterial({ color: strainConfig.stemColor, roughness: 0.9,  metalness: 0.0,  side: THREE.DoubleSide });
+        const budMat  = new THREE.MeshStandardMaterial({ color: strainConfig.budColor,  roughness: 0.7,  metalness: 0.05, side: THREE.DoubleSide });
+
+        model.traverse((node) => {
+          if (!node.isMesh) return;
+          const n = (node.name || "").toLowerCase();
+          if (n.includes("bud") || n.includes("flower") || n.includes("calyx")) node.material = budMat;
+          else if (n.includes("stem") || n.includes("branch") || n.includes("trunk")) node.material = stemMat;
+          else node.material = leafMat;
+        });
+      }
+
       scene.add(model);
       resolve();
     }, reject);
@@ -83,7 +181,7 @@ function Placeholder({ width, height, downloading, error }) {
 // interactive=false → auto-rotate only (card view)
 // interactive=true  → transparent overlay captures all touches:
 //                      1 finger = free rotation, 2 fingers = pinch zoom
-function GLBViewer({ width, height, localUri, interactive = false }) {
+function GLBViewer({ width, height, localUri, strainConfig, interactive = false }) {
   const mountedRef   = useRef(true);
   const cancelRef    = useRef(null);
   const rotYRef      = useRef(0);
@@ -106,7 +204,7 @@ function GLBViewer({ width, height, localUri, interactive = false }) {
     };
   }, []);
 
-  // Raw touch handlers — see all fingers, works where PanResponder misses pinch
+  // Raw touch handlers — see all fingers; PanResponder misses multi-touch pinch
   const onTouchStart = useCallback((e) => {
     const t = e.nativeEvent.touches;
     autoRef.current = false;
@@ -145,7 +243,6 @@ function GLBViewer({ width, height, localUri, interactive = false }) {
   const onTouchEnd = useCallback((e) => {
     const t = e.nativeEvent.touches;
     if (t.length === 1) {
-      // One finger lifted — reset tracking for remaining finger
       prevTouchRef.current = { x: t[0].pageX, y: t[0].pageY };
       prevPinchRef.current = 0;
     } else if (t.length === 0) {
@@ -172,9 +269,9 @@ function GLBViewer({ width, height, localUri, interactive = false }) {
       renderer.setPixelRatio(1);
       renderer.setClearColor(0x000000, 0);
 
-      const scene   = new THREE.Scene();
-      const lookAt  = new THREE.Vector3(0, 1.85, 0);
-      const camera  = new THREE.PerspectiveCamera(52, W / H, 0.01, 100);
+      const scene  = new THREE.Scene();
+      const lookAt = new THREE.Vector3(0, 1.85, 0);
+      const camera = new THREE.PerspectiveCamera(52, W / H, 0.01, 100);
       camera.position.set(0, 1.85, cameraZRef.current);
       camera.lookAt(lookAt);
 
@@ -186,7 +283,7 @@ function GLBViewer({ width, height, localUri, interactive = false }) {
       const rim = new THREE.DirectionalLight(0x88ffcc, 0.25);
       rim.position.set(0, -1, -3); scene.add(rim);
 
-      await loadGLBIntoScene(localUri, scene);
+      await loadGLBIntoScene(localUri, scene, strainConfig);
       if (!mountedRef.current) { try { renderer.dispose(); } catch (_) {} return; }
 
       const plantGroup = new THREE.Group();
@@ -232,7 +329,7 @@ function GLBViewer({ width, height, localUri, interactive = false }) {
       console.warn("[PlantRenderer3D]", msg);
       if (mountedRef.current) { setFailed(true); setGlErr(msg.slice(0, 40)); }
     }
-  }, [localUri, interactive]);
+  }, [localUri, interactive, strainConfig]);
 
   if (failed) return <Placeholder width={width} height={height} error={glErr} />;
 
@@ -252,7 +349,7 @@ function GLBViewer({ width, height, localUri, interactive = false }) {
 }
 
 // ── Full-screen modal ─────────────────────────────────────────────────────────
-function PlantFullscreenModal({ visible, onClose, stage, localUri }) {
+function PlantFullscreenModal({ visible, onClose, stage, localUri, strainConfig }) {
   const { width, height } = Dimensions.get("window");
   const [showHint, setShowHint] = useState(false);
 
@@ -275,7 +372,13 @@ function PlantFullscreenModal({ visible, onClose, stage, localUri }) {
       <StatusBar hidden />
       <View style={styles.fsContainer}>
         {localUri
-          ? <GLBViewer width={width} height={height} localUri={localUri} interactive />
+          ? <GLBViewer
+              width={width}
+              height={height}
+              localUri={localUri}
+              strainConfig={strainConfig}
+              interactive
+            />
           : <ActivityIndicator color="#2d6a4f" style={{ flex: 1 }} />}
 
         <View style={styles.fsLabelWrap} pointerEvents="none">
@@ -301,8 +404,10 @@ export default function PlantRenderer3D({
   width  = 300,
   height = 350,
   stage  = "Seedling",
+  strain = "",
 }) {
-  const { localUri, status } = useGLBAsset(stage);
+  const strainConfig = getStrainConfig(strain);
+  const { localUri, status } = useGLBAsset(stage, strain);
   const [fullscreen, setFullscreen] = useState(false);
   const tapStartRef = useRef({ x: 0, y: 0 });
 
@@ -314,7 +419,15 @@ export default function PlantRenderer3D({
         {/* Unmount card GL context while fullscreen to avoid dual GL contexts */}
         {!localUri || fullscreen
           ? <Placeholder width={width} height={height} downloading={downloading && !fullscreen} />
-          : <GLBViewer key={localUri} width={width} height={height} localUri={localUri} />}
+          : (
+            <GLBViewer
+              key={localUri}
+              width={width}
+              height={height}
+              localUri={localUri}
+              strainConfig={strainConfig}
+            />
+          )}
 
         {/* Transparent tap overlay — tapping the model opens fullscreen */}
         {localUri && !fullscreen && (
@@ -337,6 +450,7 @@ export default function PlantRenderer3D({
         onClose={() => setFullscreen(false)}
         stage={stage}
         localUri={localUri}
+        strainConfig={strainConfig}
       />
     </>
   );
