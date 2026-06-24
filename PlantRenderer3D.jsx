@@ -52,6 +52,22 @@ async function loadGLBIntoScene(localUri, scene, targetHeight = 3.5) {
         model.position.y = (-center.y + size.y * 0.5) * scale + 0.1;
         model.position.z = -center.z * scale;
       }
+      // React Native's Blob doesn't support ArrayBuffer so embedded textures
+      // can't load via the standard browser pipeline. Apply solid plant materials.
+      const leafMat  = new THREE.MeshStandardMaterial({ color: 0x2d7a27, roughness: 0.85, metalness: 0.0, side: THREE.DoubleSide });
+      const stemMat  = new THREE.MeshStandardMaterial({ color: 0x4a7c40, roughness: 0.9,  metalness: 0.0, side: THREE.DoubleSide });
+      const budMat   = new THREE.MeshStandardMaterial({ color: 0x8fbc45, roughness: 0.7,  metalness: 0.05, side: THREE.DoubleSide });
+      model.traverse((node) => {
+        if (!node.isMesh) return;
+        const n = (node.name || '').toLowerCase();
+        if (n.includes('bud') || n.includes('flower') || n.includes('calyx')) {
+          node.material = budMat;
+        } else if (n.includes('stem') || n.includes('branch') || n.includes('trunk')) {
+          node.material = stemMat;
+        } else {
+          node.material = leafMat;
+        }
+      });
       scene.add(model);
       resolve();
     }, (err) => {
