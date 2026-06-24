@@ -28,23 +28,29 @@ function makeCanvasPolyfill(W, H) {
 }
 
 async function loadGLBIntoScene(localUri, scene, targetHeight = 3.5) {
+  console.log("[3D] loadGLBIntoScene start, GLTFLoader=", !!GLTFLoader);
   if (!GLTFLoader) throw new Error("GLTFLoader unavailable");
   const b64 = await FileSystem.readAsStringAsync(localUri, {
     encoding: FileSystem.EncodingType.Base64,
   });
+  console.log("[3D] b64 length=", b64.length);
   const binaryStr = atob(b64);
   const bytes = new Uint8Array(binaryStr.length);
   for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
   const arrayBuffer = bytes.buffer;
+  console.log("[3D] arrayBuffer byteLength=", arrayBuffer.byteLength);
   await new Promise((resolve, reject) => {
     const loader = new GLTFLoader();
     loader.setDRACOLoader(_dracoLoader);
+    console.log("[3D] calling loader.parse...");
     loader.parse(arrayBuffer, "", (gltf) => {
+      console.log("[3D] parse success, scene children=", gltf.scene.children.length);
       const model = gltf.scene;
       const box    = new THREE.Box3().setFromObject(model);
       const size   = box.getSize(new THREE.Vector3());
       const center = box.getCenter(new THREE.Vector3());
       const maxDim = Math.max(size.x, size.y, size.z);
+      console.log("[3D] model size=", size.x, size.y, size.z, "maxDim=", maxDim);
       if (maxDim > 0) {
         const scale = targetHeight / maxDim;
         model.scale.setScalar(scale);
@@ -54,7 +60,10 @@ async function loadGLBIntoScene(localUri, scene, targetHeight = 3.5) {
       }
       scene.add(model);
       resolve();
-    }, reject);
+    }, (err) => {
+      console.error("[3D] parse error:", err?.message || String(err));
+      reject(err);
+    });
   });
 }
 
@@ -168,6 +177,7 @@ export default function PlantRenderer3D({
   // strainType, tier, strainSeed, day, totalDays accepted for prop compat — not used by GLB
 }) {
   const { localUri, status } = useGLBAsset(stage);
+  console.log("[3D] stage=", stage, "status=", status, "localUri=", localUri);
 
   const downloading = status === "checking" || status === "downloading";
 
