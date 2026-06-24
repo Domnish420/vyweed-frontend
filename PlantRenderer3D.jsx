@@ -34,13 +34,15 @@ function makeCanvasPolyfill(W, H) {
 // Build a Three.js Texture from a local file URI.
 // expo-gl's texImage2D understands { uri } objects natively.
 // Mipmaps are disabled — expo-gl + mobile = linear filtering is fine.
-function makeTexture(uri) {
+// isColor=true sets sRGB encoding (base color maps); data maps stay linear.
+function makeTexture(uri, isColor = false) {
   const tex = new THREE.Texture();
-  tex.image          = { uri };
-  tex.flipY          = false;          // GLTF spec: V=0 is bottom of image
+  tex.image           = { uri };
+  tex.flipY           = false;          // GLTF spec: V=0 is bottom of image
   tex.generateMipmaps = false;
-  tex.minFilter      = THREE.LinearFilter;
-  tex.needsUpdate    = true;
+  tex.minFilter       = THREE.LinearFilter;
+  if (isColor) tex.encoding = THREE.sRGBEncoding;
+  tex.needsUpdate     = true;
   return tex;
 }
 
@@ -57,33 +59,36 @@ function applyGLTFTextures(threeMat, jsonMat, gltfTextures, textureURIs) {
 
   const baseUri = getURI(pbr.baseColorTexture?.index);
   if (baseUri) {
-    threeMat.map = makeTexture(baseUri);
+    threeMat.map = makeTexture(baseUri, true); // sRGB — colour data
     const f = pbr.baseColorFactor;
     threeMat.color.setRGB(f ? f[0] : 1, f ? f[1] : 1, f ? f[2] : 1);
   }
 
   const normalUri = getURI(jsonMat.normalTexture?.index);
-  if (normalUri) threeMat.normalMap = makeTexture(normalUri);
+  if (normalUri) threeMat.normalMap = makeTexture(normalUri); // linear
 
+  // Plants are 100% dielectric — zero out metalness entirely.
+  // We still use the green channel of the MR texture for roughness detail.
   const mrUri = getURI(pbr.metallicRoughnessTexture?.index);
+  threeMat.metalness    = 0;
+  threeMat.metalnessMap = null;
   if (mrUri) {
-    threeMat.metalnessMap = makeTexture(mrUri);
-    threeMat.roughnessMap = makeTexture(mrUri);
+    threeMat.roughnessMap = makeTexture(mrUri); // linear; green channel = roughness
+    threeMat.roughness    = 1.0;               // roughness = 1.0 × texture
+  } else {
+    threeMat.roughness = pbr.roughnessFactor ?? 0.85;
   }
 
   const occUri = getURI(jsonMat.occlusionTexture?.index);
-  if (occUri) threeMat.aoMap = makeTexture(occUri);
+  if (occUri) threeMat.aoMap = makeTexture(occUri); // linear
 
   const emissUri = getURI(jsonMat.emissiveTexture?.index);
   if (emissUri) {
-    threeMat.emissiveMap = makeTexture(emissUri);
+    threeMat.emissiveMap = makeTexture(emissUri, true); // sRGB
     threeMat.emissive    = new THREE.Color(1, 1, 1);
   }
 
-  if (pbr.roughnessFactor != null) threeMat.roughness = pbr.roughnessFactor;
-  if (pbr.metallicFactor  != null) threeMat.metalness = pbr.metallicFactor;
-
-  threeMat.side       = THREE.DoubleSide;
+  threeMat.side        = THREE.DoubleSide;
   threeMat.needsUpdate = true;
 }
 
@@ -268,6 +273,10 @@ function GLBViewer({ width, height, localUri, strainConfig, interactive = false 
       renderer.setSize(W, H);
       renderer.setPixelRatio(1);
       renderer.setClearColor(0x000000, 0);
+      // sRGB output + filmic tone mapping for correct PBR colour reproduction
+      renderer.outputEncoding    = THREE.sRGBEncoding;
+      renderer.toneMapping       = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.15;
 
       const scene  = new THREE.Scene();
       const lookAt = new THREE.Vector3(0, 1.85, 0);
@@ -275,12 +284,15 @@ function GLBViewer({ width, height, localUri, strainConfig, interactive = false 
       camera.position.set(0, 1.85, cameraZRef.current);
       camera.lookAt(lookAt);
 
-      scene.add(new THREE.AmbientLight(0xffffff, 0.65));
-      const key = new THREE.DirectionalLight(0xfff5e8, 1.2);
+      // HemisphereLight mimics outdoor sky/ground bounce — much better than
+      // a flat ambient for plants with real PBR textures.
+      const hemi = new THREE.HemisphereLight(0x9fd8ff, 0x4a7c40, 0.9);
+      scene.add(hemi);
+      const key = new THREE.DirectionalLight(0xfffaf0, 2.2);
       key.position.set(-2.5, 4, 3); scene.add(key);
-      const fill = new THREE.DirectionalLight(0xc8e8ff, 0.40);
+      const fill = new THREE.DirectionalLight(0xd0e8ff, 0.6);
       fill.position.set(3, 1, 2); scene.add(fill);
-      const rim = new THREE.DirectionalLight(0x88ffcc, 0.25);
+      const rim = new THREE.DirectionalLight(0x88ffcc, 0.3);
       rim.position.set(0, -1, -3); scene.add(rim);
 
       await loadGLBIntoScene(localUri, scene, strainConfig);
