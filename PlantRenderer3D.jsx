@@ -273,10 +273,10 @@ function GLBViewer({ width, height, localUri, strainConfig, interactive = false 
       renderer.setSize(W, H);
       renderer.setPixelRatio(1);
       renderer.setClearColor(0x000000, 0);
-      // sRGB output + filmic tone mapping for correct PBR colour reproduction
+      // sRGB output — Reinhard tone map (forgiving curve for mid-range PBR values)
       renderer.outputColorSpace    = THREE.SRGBColorSpace;
-      renderer.toneMapping         = THREE.ACESFilmicToneMapping;
-      renderer.toneMappingExposure = 1.15;
+      renderer.toneMapping         = THREE.ReinhardToneMapping;
+      renderer.toneMappingExposure = 1.8;
 
       const scene  = new THREE.Scene();
       const lookAt = new THREE.Vector3(0, 1.85, 0);
@@ -284,15 +284,15 @@ function GLBViewer({ width, height, localUri, strainConfig, interactive = false 
       camera.position.set(0, 1.85, cameraZRef.current);
       camera.lookAt(lookAt);
 
-      // HemisphereLight mimics outdoor sky/ground bounce — much better than
-      // a flat ambient for plants with real PBR textures.
-      const hemi = new THREE.HemisphereLight(0x9fd8ff, 0x4a7c40, 0.9);
+      // PBR textures have low linear albedo (~0.05–0.2) so lights need to be
+      // much brighter than for solid-colour materials.
+      const hemi = new THREE.HemisphereLight(0x9fd8ff, 0x4a7c40, 4.0);
       scene.add(hemi);
-      const key = new THREE.DirectionalLight(0xfffaf0, 2.2);
+      const key = new THREE.DirectionalLight(0xfffaf0, 8.0);
       key.position.set(-2.5, 4, 3); scene.add(key);
-      const fill = new THREE.DirectionalLight(0xd0e8ff, 0.6);
+      const fill = new THREE.DirectionalLight(0xd0e8ff, 3.0);
       fill.position.set(3, 1, 2); scene.add(fill);
-      const rim = new THREE.DirectionalLight(0x88ffcc, 0.3);
+      const rim = new THREE.DirectionalLight(0x88ffcc, 1.0);
       rim.position.set(0, -1, -3); scene.add(rim);
 
       await loadGLBIntoScene(localUri, scene, strainConfig);
