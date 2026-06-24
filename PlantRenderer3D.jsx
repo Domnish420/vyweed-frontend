@@ -41,7 +41,7 @@ function makeTexture(uri, isColor = false) {
   tex.flipY           = false;          // GLTF spec: V=0 is bottom of image
   tex.generateMipmaps = false;
   tex.minFilter       = THREE.LinearFilter;
-  if (isColor) tex.encoding = THREE.sRGBEncoding;
+  if (isColor) tex.colorSpace = THREE.SRGBColorSpace;
   tex.needsUpdate     = true;
   return tex;
 }
@@ -274,8 +274,8 @@ function GLBViewer({ width, height, localUri, strainConfig, interactive = false 
       renderer.setPixelRatio(1);
       renderer.setClearColor(0x000000, 0);
       // sRGB output + filmic tone mapping for correct PBR colour reproduction
-      renderer.outputEncoding    = THREE.sRGBEncoding;
-      renderer.toneMapping       = THREE.ACESFilmicToneMapping;
+      renderer.outputColorSpace    = THREE.SRGBColorSpace;
+      renderer.toneMapping         = THREE.ACESFilmicToneMapping;
       renderer.toneMappingExposure = 1.15;
 
       const scene  = new THREE.Scene();
