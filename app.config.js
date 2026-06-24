@@ -57,7 +57,19 @@ export default {
       favicon: './assets/favicon.png',
     },
 
-    plugins: ['expo-notifications', 'expo-image-picker', 'expo-camera'],
+    plugins: [
+      'expo-notifications',
+      'expo-image-picker',
+      'expo-camera',
+      [
+        'expo-build-properties',
+        {
+          android: {
+            ndkVersion: '30.0.14904198',
+          },
+        },
+      ],
+    ],
 
     extra: {
       appEnv:                    process.env.APP_ENV                    ?? 'development',
