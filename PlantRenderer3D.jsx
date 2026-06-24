@@ -34,14 +34,15 @@ function makeCanvasPolyfill(W, H) {
 // Build a Three.js Texture from a local file URI.
 // expo-gl's texImage2D understands { uri } objects natively.
 // Mipmaps are disabled — expo-gl + mobile = linear filtering is fine.
-// isColor=true sets sRGB encoding (base color maps); data maps stay linear.
-function makeTexture(uri, isColor = false) {
+// No colorSpace set: expo-gl WebGL1 lacks EXT_sRGB framebuffer support so
+// the full sRGB pipeline doesn't round-trip correctly. Keeping everything
+// in the default linear pass-through gives correct visible results.
+function makeTexture(uri) {
   const tex = new THREE.Texture();
   tex.image           = { uri };
   tex.flipY           = false;          // GLTF spec: V=0 is bottom of image
   tex.generateMipmaps = false;
   tex.minFilter       = THREE.LinearFilter;
-  if (isColor) tex.colorSpace = THREE.SRGBColorSpace;
   tex.needsUpdate     = true;
   return tex;
 }
@@ -59,7 +60,7 @@ function applyGLTFTextures(threeMat, jsonMat, gltfTextures, textureURIs) {
 
   const baseUri = getURI(pbr.baseColorTexture?.index);
   if (baseUri) {
-    threeMat.map = makeTexture(baseUri, true); // sRGB — colour data
+    threeMat.map = makeTexture(baseUri);
     const f = pbr.baseColorFactor;
     threeMat.color.setRGB(f ? f[0] : 1, f ? f[1] : 1, f ? f[2] : 1);
   }
@@ -84,7 +85,7 @@ function applyGLTFTextures(threeMat, jsonMat, gltfTextures, textureURIs) {
 
   const emissUri = getURI(jsonMat.emissiveTexture?.index);
   if (emissUri) {
-    threeMat.emissiveMap = makeTexture(emissUri, true); // sRGB
+    threeMat.emissiveMap = makeTexture(emissUri);
     threeMat.emissive    = new THREE.Color(1, 1, 1);
   }
 
@@ -273,8 +274,8 @@ function GLBViewer({ width, height, localUri, strainConfig, interactive = false 
       renderer.setSize(W, H);
       renderer.setPixelRatio(1);
       renderer.setClearColor(0x000000, 0);
-      // sRGB output — Reinhard tone map (forgiving curve for mid-range PBR values)
-      renderer.outputColorSpace    = THREE.SRGBColorSpace;
+      // expo-gl WebGL1 lacks EXT_sRGB so outputColorSpace conversion doesn't
+      // round-trip. Leave output as linear and use Reinhard to compress HDR.
       renderer.toneMapping         = THREE.ReinhardToneMapping;
       renderer.toneMappingExposure = 1.8;
 
