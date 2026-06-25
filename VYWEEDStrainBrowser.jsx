@@ -855,7 +855,7 @@ function LockedStrainCard({ strain }) {
   const TIER_COLS   = { T1: "#b9f2ff", T2: "#ffd700", T3: "#c0c0c0", T4: "#cd7f32" };
   const col = TIER_COLS[strain.tier] || C.grey;
   return (
-    <View style={{ width: CARD_W, backgroundColor: C.card, borderRadius: 16,
+    <View style={{ flex: 1, backgroundColor: C.card, borderRadius: 16,
       borderWidth: 1, borderColor: C.border,
       borderLeftWidth: 3, borderLeftColor: `${col}44`,
       padding: 13, minHeight: 152, opacity: 0.7, justifyContent: "space-between" }}>
@@ -893,7 +893,7 @@ function StrainCard({ strain, onPress, hasTrophy, compareMode, isInCompare }) {
   const flowerLabel = strain.flower_wk_max ? `${strain.flower_wk_max}wk` : "—";
 
   return (
-    <TouchableOpacity onPress={onPress} activeOpacity={0.85} style={{ width: CARD_W }}>
+    <TouchableOpacity onPress={onPress} activeOpacity={0.85} style={{ flex: 1 }}>
       <View style={{
         backgroundColor: isInCompare ? `${C.purple}15` : C.card,
         borderRadius: 16,

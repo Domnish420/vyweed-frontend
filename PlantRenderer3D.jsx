@@ -274,9 +274,8 @@ function GLBViewer({ width, height, localUri, strainConfig, interactive = false 
       renderer.setSize(W, H);
       renderer.setPixelRatio(1);
       renderer.setClearColor(0x000000, 0);
-      // outputColorSpace is implemented in pure GLSL (no EXT_sRGB extension
-      // needed) so it works correctly in expo-gl WebGL1.
-      renderer.outputColorSpace    = THREE.SRGBColorSpace;
+      // outputColorSpace=SRGBColorSpace crashes Three.js r152 shader compilation
+      // on expo-gl WebGL1 ('trim' of undefined). Leave default linear output.
       renderer.toneMapping         = THREE.ReinhardToneMapping;
       renderer.toneMappingExposure = 1.2;
 
