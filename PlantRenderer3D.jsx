@@ -2,7 +2,7 @@
 // Full PBR textures work natively — no ArrayBuffer/Blob limitations.
 // Requires a dev-client or EAS build (native module).
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Dimensions,
@@ -15,9 +15,10 @@ import {
 } from "react-native";
 import {
   Camera,
-  DefaultLight,
+  EnvironmentalLight,
   FilamentScene,
   FilamentView,
+  Light,
   Model,
   useFilamentContext,
   useCameraManipulator,
@@ -25,6 +26,32 @@ import {
 import { useSharedValue } from "react-native-worklets-core";
 import { getStrainConfig } from "./STRAIN_CONFIG";
 import useGLBAsset from "./useGLBAsset";
+
+// Stable module-level source for the image-based light.
+// react-native-filament's <DefaultLight> passes a fresh `{ uri }` object on
+// every render, which makes EnvironmentalLight's worklet effect re-run and
+// double-release the KTX buffer ("Pointer FilamentBuffer has already been
+// manually released!"). A constant reference keeps the worklet deps stable so
+// the buffer is set up and released exactly once.
+const IBL_SOURCE = { uri: "RNF_default_env_ibl.ktx" };
+
+// Lights rendered once per scene. EnvironmentalLight gives plants their soft
+// ambient/PBR reflections; the directional light is the key/sun. Both live
+// inside a child of <FilamentScene> so useFilamentContext() resolves.
+function PlantLights() {
+  return (
+    <>
+      <EnvironmentalLight source={IBL_SOURCE} intensity={28000} />
+      <Light
+        type="directional"
+        intensity={12000}
+        colorKelvin={6500}
+        direction={[0.3, -1, -0.6]}
+        castShadows={false}
+      />
+    </>
+  );
+}
 
 // ── Placeholder ────────────────────────────────────────────────────────────────
 function Placeholder({ width, height, downloading, error }) {
@@ -45,6 +72,9 @@ function CardScene({ localUri, strainConfig }) {
   const { camera, view } = useFilamentContext();
   const angle   = useSharedValue(0);
   const prevAsp = useSharedValue(0);
+
+  // Stable source object so useModel's buffer isn't recreated every render.
+  const modelSource = useMemo(() => ({ uri: localUri }), [localUri]);
 
   const sXZ = (strainConfig.scaleXZ ?? 1.0) * 3.5;
   const sY  = (strainConfig.scaleY  ?? 1.0) * 3.5;
@@ -70,9 +100,9 @@ function CardScene({ localUri, strainConfig }) {
 
   return (
     <FilamentView style={{ flex: 1 }} renderCallback={renderCallback}>
-      <DefaultLight />
+      <PlantLights />
       <Model
-        source={{ uri: localUri }}
+        source={modelSource}
         transformToUnitCube
         scale={[sXZ, sY, sXZ]}
       />
@@ -92,6 +122,9 @@ function FullscreenScene({ localUri, strainConfig }) {
   });
 
   const prevPinchRef = useRef(0);
+
+  // Stable source object so useModel's buffer isn't recreated every render.
+  const modelSource = useMemo(() => ({ uri: localUri }), [localUri]);
 
   const sXZ = (strainConfig.scaleXZ ?? 1.0) * 3.5;
   const sY  = (strainConfig.scaleY  ?? 1.0) * 3.5;
@@ -163,9 +196,9 @@ function FullscreenScene({ localUri, strainConfig }) {
           far={100}
           focalLengthInMillimeters={28}
         />
-        <DefaultLight />
+        <PlantLights />
         <Model
-          source={{ uri: localUri }}
+          source={modelSource}
           transformToUnitCube
           scale={[sXZ, sY, sXZ]}
         />
