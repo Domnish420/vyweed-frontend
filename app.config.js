@@ -65,7 +65,7 @@ export default {
         'expo-build-properties',
         {
           android: {
-            ndkVersion: '30.0.14904198',
+            ndkVersion: '26.1.10909125',
           },
         },
       ],
