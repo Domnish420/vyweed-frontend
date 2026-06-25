@@ -141,9 +141,13 @@ function FullscreenScene({ localUri, strainConfig }) {
   });
 
   const prevPinchRef = useRef(0);
-  // Current grab mode: 'none' | 'orbit' (1 finger) | 'pan' (2 fingers).
-  // The manipulator has a single active grab, so we track which one is live to
-  // transition cleanly when fingers are added/lifted.
+  const prevCxRef    = useRef(0);
+  const prevCyRef    = useRef(0);
+  // The manipulator can run only ONE thing per frame — a strafe grab (pan) OR a
+  // scroll (zoom); doing both makes the grab overwrite the zoom. So we track
+  // what's live: 'none' | 'orbit' (1 finger) | 'pan' (strafe grab active).
+  // On two fingers we pick pan vs zoom per frame by which the fingers are doing,
+  // ending the pan grab before any zoom so the dolly isn't clobbered.
   const modeRef = useRef("none");
 
   // Stable source object so useModel's buffer isn't recreated every render.
@@ -162,13 +166,13 @@ function FullscreenScene({ localUri, strainConfig }) {
     (e) => {
       const t = e.nativeEvent.touches;
       if (t.length >= 2) {
-        // Two fingers: pan (strafe) + pinch zoom. End any 1-finger orbit first.
-        if (modeRef.current === "orbit") cameraManipulator?.grabEnd();
-        const cx = (t[0].pageX + t[1].pageX) / 2;
-        const cy = (t[0].pageY + t[1].pageY) / 2;
-        cameraManipulator?.grabBegin(cx, cy, true); // strafe = pan
+        // Entering two-finger mode: drop any orbit/pan grab, just record the
+        // baseline. We decide pan-vs-zoom on each move, not here.
+        if (modeRef.current !== "none") cameraManipulator?.grabEnd();
         prevPinchRef.current = pinchDist(t);
-        modeRef.current = "pan";
+        prevCxRef.current = (t[0].pageX + t[1].pageX) / 2;
+        prevCyRef.current = (t[0].pageY + t[1].pageY) / 2;
+        modeRef.current = "two";
       } else if (t.length === 1) {
         cameraManipulator?.grabBegin(t[0].pageX, t[0].pageY, false); // orbit
         prevPinchRef.current = 0;
@@ -185,13 +189,31 @@ function FullscreenScene({ localUri, strainConfig }) {
         const cx   = (t[0].pageX + t[1].pageX) / 2;
         const cy   = (t[0].pageY + t[1].pageY) / 2;
         const dist = pinchDist(t);
-        // Pinch zoom: negative scrolldelta = zoom in, positive = zoom out.
-        if (prevPinchRef.current > 0) {
-          cameraManipulator?.scroll(cx, cy, prevPinchRef.current - dist);
+
+        const dDist = prevPinchRef.current - dist;                 // + = pinch in
+        const dPan  = Math.hypot(cx - prevCxRef.current, cy - prevCyRef.current);
+
+        if (Math.abs(dDist) >= dPan) {
+          // Pinch dominates this frame → zoom. End the pan grab first so the
+          // dolly isn't immediately overwritten by a strafe.
+          if (modeRef.current === "pan") {
+            cameraManipulator?.grabEnd();
+            modeRef.current = "two";
+          }
+          // negative scrolldelta = zoom in, positive = zoom out
+          cameraManipulator?.scroll(cx, cy, dDist);
+        } else {
+          // Drag dominates → pan. Keep a persistent strafe grab going.
+          if (modeRef.current !== "pan") {
+            cameraManipulator?.grabBegin(prevCxRef.current, prevCyRef.current, true);
+            modeRef.current = "pan";
+          }
+          cameraManipulator?.grabUpdate(cx, cy);
         }
+
         prevPinchRef.current = dist;
-        // Drag both fingers to pan around the plant.
-        cameraManipulator?.grabUpdate(cx, cy);
+        prevCxRef.current = cx;
+        prevCyRef.current = cy;
       } else if (t.length === 1) {
         prevPinchRef.current = 0;
         cameraManipulator?.grabUpdate(t[0].pageX, t[0].pageY);
@@ -204,12 +226,14 @@ function FullscreenScene({ localUri, strainConfig }) {
     (e) => {
       const remaining = e.nativeEvent.touches;
       if (remaining.length === 0) {
-        cameraManipulator?.grabEnd();
+        if (modeRef.current === "pan" || modeRef.current === "orbit") {
+          cameraManipulator?.grabEnd();
+        }
         prevPinchRef.current = 0;
         modeRef.current = "none";
       } else if (remaining.length === 1) {
-        // Dropped from two fingers to one: end the pan grab, resume orbit.
-        cameraManipulator?.grabEnd();
+        // Dropped from two fingers to one: end any pan grab, resume orbit.
+        if (modeRef.current === "pan") cameraManipulator?.grabEnd();
         cameraManipulator?.grabBegin(remaining[0].pageX, remaining[0].pageY, false);
         prevPinchRef.current = 0;
         modeRef.current = "orbit";
