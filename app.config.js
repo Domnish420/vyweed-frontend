@@ -61,14 +61,11 @@ export default {
       'expo-notifications',
       'expo-image-picker',
       'expo-camera',
-      [
-        'expo-build-properties',
-        {
-          android: {
-            ndkVersion: '27.0.12077973',
-          },
-        },
-      ],
+      // NOTE: NDK version is NOT configurable via expo-build-properties@0.14.x
+      // (it has no `android.ndkVersion` option). The native build uses React
+      // Native 0.85's default NDK 27.0.12077973, which react-native-filament
+      // also requires (CMake needs NDK >= 27). Install that exact NDK via the
+      // Android Studio SDK Manager — it cannot be pinned from app config here.
     ],
 
     extra: {
