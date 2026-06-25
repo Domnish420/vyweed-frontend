@@ -31,6 +31,31 @@ import useGLBAsset from "./useGLBAsset";
 // Stable module-level source for the image-based light.
 const IBL_SOURCE = { uri: "RNF_default_env_ibl.ktx" };
 
+// ── Continuous growth ──────────────────────────────────────────────────────────
+// The 9 stage GLBs are different meshes, so we can't vertex-morph between them.
+// Instead the plant grows in apparent size as `day` advances, bridging the gap
+// between stages so scrubbing through time reads as one continuous grow. Size is
+// driven by camera distance (robust — no Filament transform-compounding issues).
+//
+// Real cannabis height is mostly set by the end of the "stretch" (~halfway
+// through the grow); after that buds bulk up but height plateaus. So growth ramps
+// from a seedling floor to full size by mid-grow, then holds.
+const CAM_FAR  = 9.0;   // seedling — camera pulled back, plant looks small
+const CAM_NEAR = 3.6;   // mature   — camera close, plant fills the frame
+
+function computeGrowth(day, totalDays) {
+  if (!day || !totalDays) return 1;
+  const stretchEnd = totalDays * 0.5;            // height ~maxed after the stretch
+  const hp     = Math.min(day / stretchEnd, 1);  // 0..1 height progress
+  const eased  = hp * hp * (3 - 2 * hp);         // smoothstep
+  return 0.16 + 0.84 * eased;                    // 0.16 (seedling) .. 1.0 (mature)
+}
+
+function growthToRadius(growth) {
+  const g = Math.max(0, Math.min(1, growth));
+  return CAM_FAR - (CAM_FAR - CAM_NEAR) * g;
+}
+
 // Our own image-based light — the library's <EnvironmentalLight>/<DefaultLight>
 // calls lightBuffer.release() itself right after setIndirectLight(). Under
 // Fabric dev mode React double-invokes effects (mount → unmount → remount),
@@ -87,16 +112,25 @@ function Placeholder({ width, height, downloading, error }) {
 
 // ── Card scene (non-interactive, auto-rotate) ─────────────────────────────────
 // Must be a child of <FilamentScene> so useFilamentContext() can resolve.
-function CardScene({ localUri, strainConfig }) {
+function CardScene({ localUri, strainConfig, growth = 1 }) {
   const { camera, view } = useFilamentContext();
   const angle   = useSharedValue(0);
   const prevAsp = useSharedValue(0);
+  // curR eases toward targetR each frame so day-clicks animate the plant
+  // growing/shrinking instead of snapping.
+  const targetR = useSharedValue(growthToRadius(growth));
+  const curR    = useSharedValue(growthToRadius(growth));
 
   // Stable source object so useModel's buffer isn't recreated every render.
   const modelSource = useMemo(() => ({ uri: localUri }), [localUri]);
 
   const sXZ = (strainConfig.scaleXZ ?? 1.0) * 3.5;
   const sY  = (strainConfig.scaleY  ?? 1.0) * 3.5;
+
+  // Retarget the camera distance whenever growth changes (day scrubbed).
+  useEffect(() => {
+    targetR.value = growthToRadius(growth);
+  }, [growth, targetR]);
 
   const renderCallback = useCallback(
     (frameInfo) => {
@@ -106,15 +140,18 @@ function CardScene({ localUri, strainConfig }) {
         prevAsp.value = asp;
         camera.setLensProjection(28, asp, 0.1, 100);
       }
+      // Ease camera distance toward the growth target (~0.3s settle).
+      const k = Math.min(1, frameInfo.timeSinceLastFrame * 6);
+      curR.value = curR.value + (targetR.value - curR.value) * k;
       angle.value = angle.value + frameInfo.timeSinceLastFrame * 0.5;
-      const r = 4.5;
+      const r = curR.value;
       camera.lookAt(
         [Math.sin(angle.value) * r, 0.5, Math.cos(angle.value) * r],
         [0, 0.5, 0],
         [0, 1, 0]
       );
     },
-    [angle, camera, prevAsp, view]
+    [angle, camera, curR, prevAsp, targetR, view]
   );
 
   return (
@@ -131,9 +168,11 @@ function CardScene({ localUri, strainConfig }) {
 
 // ── Fullscreen scene (interactive orbit + pinch zoom) ─────────────────────────
 // Must be a child of <FilamentScene>.
-function FullscreenScene({ localUri, strainConfig }) {
+function FullscreenScene({ localUri, strainConfig, growth = 1 }) {
+  // Open framed at the plant's current size, then the user can pinch freely.
+  const homeR = growthToRadius(growth);
   const cameraManipulator = useCameraManipulator({
-    orbitHomePosition: [0, 0.5, 4.5],
+    orbitHomePosition: [0, 0.5, homeR],
     targetPosition:    [0, 0.5, 0],
     upVector:          [0, 1, 0],
     zoomSpeed:         [0.02],          // ~12x faster pinch zoom than before
@@ -268,7 +307,7 @@ function FullscreenScene({ localUri, strainConfig }) {
 }
 
 // ── Full-screen modal ──────────────────────────────────────────────────────────
-function PlantFullscreenModal({ visible, onClose, stage, localUri, strainConfig }) {
+function PlantFullscreenModal({ visible, onClose, stage, localUri, strainConfig, growth }) {
   const [showHint, setShowHint] = useState(false);
 
   useEffect(() => {
@@ -291,7 +330,7 @@ function PlantFullscreenModal({ visible, onClose, stage, localUri, strainConfig 
       <View style={styles.fsContainer}>
         {localUri ? (
           <FilamentScene>
-            <FullscreenScene localUri={localUri} strainConfig={strainConfig} />
+            <FullscreenScene localUri={localUri} strainConfig={strainConfig} growth={growth} />
           </FilamentScene>
         ) : (
           <ActivityIndicator color="#2d6a4f" style={{ flex: 1 }} />
@@ -317,15 +356,20 @@ function PlantFullscreenModal({ visible, onClose, stage, localUri, strainConfig 
 
 // ── Public component ───────────────────────────────────────────────────────────
 export default function PlantRenderer3D({
-  width  = 300,
-  height = 350,
-  stage  = "Seedling",
-  strain = "",
+  width     = 300,
+  height    = 350,
+  stage     = "Seedling",
+  strain    = "",
+  day       = 0,
+  totalDays = 0,
 }) {
   const strainConfig = getStrainConfig(strain);
   const { localUri, status } = useGLBAsset(stage, strain);
   const [fullscreen, setFullscreen] = useState(false);
   const tapStartRef = useRef({ x: 0, y: 0 });
+
+  // Continuous size growth across the whole grow — bridges the stage GLB swaps.
+  const growth = computeGrowth(day, totalDays);
 
   const downloading = status === "checking" || status === "downloading";
 
@@ -341,7 +385,7 @@ export default function PlantRenderer3D({
           />
         ) : (
           <FilamentScene>
-            <CardScene localUri={localUri} strainConfig={strainConfig} />
+            <CardScene localUri={localUri} strainConfig={strainConfig} growth={growth} />
           </FilamentScene>
         )}
 
@@ -367,6 +411,7 @@ export default function PlantRenderer3D({
         stage={stage}
         localUri={localUri}
         strainConfig={strainConfig}
+        growth={growth}
       />
     </>
   );
