@@ -136,11 +136,15 @@ function FullscreenScene({ localUri, strainConfig }) {
     orbitHomePosition: [0, 0.5, 4.5],
     targetPosition:    [0, 0.5, 0],
     upVector:          [0, 1, 0],
-    zoomSpeed:         [0.04],
-    orbitSpeed:        [0.008, 0.008],
+    zoomSpeed:         [0.02],          // ~12x faster pinch zoom than before
+    orbitSpeed:        [0.004, 0.004],  // halved — less twitchy rotation
   });
 
   const prevPinchRef = useRef(0);
+  // Current grab mode: 'none' | 'orbit' (1 finger) | 'pan' (2 fingers).
+  // The manipulator has a single active grab, so we track which one is live to
+  // transition cleanly when fingers are added/lifted.
+  const modeRef = useRef("none");
 
   // Stable source object so useModel's buffer isn't recreated every render.
   const modelSource = useMemo(() => ({ uri: localUri }), [localUri]);
@@ -148,17 +152,27 @@ function FullscreenScene({ localUri, strainConfig }) {
   const sXZ = (strainConfig.scaleXZ ?? 1.0) * 3.5;
   const sY  = (strainConfig.scaleY  ?? 1.0) * 3.5;
 
+  const pinchDist = (t) => {
+    const dx = t[0].pageX - t[1].pageX;
+    const dy = t[0].pageY - t[1].pageY;
+    return Math.sqrt(dx * dx + dy * dy);
+  };
+
   const onTouchStart = useCallback(
     (e) => {
       const t = e.nativeEvent.touches;
-      if (t.length === 1) {
-        cameraManipulator?.grabBegin(t[0].pageX, t[0].pageY, false);
+      if (t.length >= 2) {
+        // Two fingers: pan (strafe) + pinch zoom. End any 1-finger orbit first.
+        if (modeRef.current === "orbit") cameraManipulator?.grabEnd();
+        const cx = (t[0].pageX + t[1].pageX) / 2;
+        const cy = (t[0].pageY + t[1].pageY) / 2;
+        cameraManipulator?.grabBegin(cx, cy, true); // strafe = pan
+        prevPinchRef.current = pinchDist(t);
+        modeRef.current = "pan";
+      } else if (t.length === 1) {
+        cameraManipulator?.grabBegin(t[0].pageX, t[0].pageY, false); // orbit
         prevPinchRef.current = 0;
-      } else if (t.length >= 2) {
-        cameraManipulator?.grabEnd();
-        const dx = t[0].pageX - t[1].pageX;
-        const dy = t[0].pageY - t[1].pageY;
-        prevPinchRef.current = Math.sqrt(dx * dx + dy * dy);
+        modeRef.current = "orbit";
       }
     },
     [cameraManipulator]
@@ -168,16 +182,16 @@ function FullscreenScene({ localUri, strainConfig }) {
     (e) => {
       const t = e.nativeEvent.touches;
       if (t.length >= 2) {
-        const dx   = t[0].pageX - t[1].pageX;
-        const dy   = t[0].pageY - t[1].pageY;
-        const dist = Math.sqrt(dx * dx + dy * dy);
+        const cx   = (t[0].pageX + t[1].pageX) / 2;
+        const cy   = (t[0].pageY + t[1].pageY) / 2;
+        const dist = pinchDist(t);
+        // Pinch zoom: negative scrolldelta = zoom in, positive = zoom out.
         if (prevPinchRef.current > 0) {
-          const mx = (t[0].pageX + t[1].pageX) / 2;
-          const my = (t[0].pageY + t[1].pageY) / 2;
-          // positive scrolldelta = zoom out, negative = zoom in
-          cameraManipulator?.scroll(mx, my, (prevPinchRef.current - dist) * 0.04);
+          cameraManipulator?.scroll(cx, cy, prevPinchRef.current - dist);
         }
         prevPinchRef.current = dist;
+        // Drag both fingers to pan around the plant.
+        cameraManipulator?.grabUpdate(cx, cy);
       } else if (t.length === 1) {
         prevPinchRef.current = 0;
         cameraManipulator?.grabUpdate(t[0].pageX, t[0].pageY);
@@ -192,10 +206,13 @@ function FullscreenScene({ localUri, strainConfig }) {
       if (remaining.length === 0) {
         cameraManipulator?.grabEnd();
         prevPinchRef.current = 0;
+        modeRef.current = "none";
       } else if (remaining.length === 1) {
-        // Lifted one finger during pinch: restart single-finger orbit
-        prevPinchRef.current = 0;
+        // Dropped from two fingers to one: end the pan grab, resume orbit.
+        cameraManipulator?.grabEnd();
         cameraManipulator?.grabBegin(remaining[0].pageX, remaining[0].pageY, false);
+        prevPinchRef.current = 0;
+        modeRef.current = "orbit";
       }
     },
     [cameraManipulator]
