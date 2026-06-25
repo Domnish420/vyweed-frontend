@@ -15,12 +15,13 @@ import {
 } from "react-native";
 import {
   Camera,
-  EnvironmentalLight,
   FilamentScene,
   FilamentView,
   Light,
   Model,
+  useBuffer,
   useFilamentContext,
+  useWorkletEffect,
   useCameraManipulator,
 } from "react-native-filament";
 import { useSharedValue } from "react-native-worklets-core";
@@ -28,20 +29,38 @@ import { getStrainConfig } from "./STRAIN_CONFIG";
 import useGLBAsset from "./useGLBAsset";
 
 // Stable module-level source for the image-based light.
-// react-native-filament's <DefaultLight> passes a fresh `{ uri }` object on
-// every render, which makes EnvironmentalLight's worklet effect re-run and
-// double-release the KTX buffer ("Pointer FilamentBuffer has already been
-// manually released!"). A constant reference keeps the worklet deps stable so
-// the buffer is set up and released exactly once.
 const IBL_SOURCE = { uri: "RNF_default_env_ibl.ktx" };
 
-// Lights rendered once per scene. EnvironmentalLight gives plants their soft
-// ambient/PBR reflections; the directional light is the key/sun. Both live
-// inside a child of <FilamentScene> so useFilamentContext() resolves.
+// Our own image-based light — the library's <EnvironmentalLight>/<DefaultLight>
+// calls lightBuffer.release() itself right after setIndirectLight(). Under
+// Fabric dev mode React double-invokes effects (mount → unmount → remount),
+// so on remount the worklet runs again against the already-freed pointer and
+// throws "Pointer FilamentBuffer has already been manually released!".
+//
+// Here we own the buffer: releaseOnUnmount:false means useBuffer never frees
+// it, and we never call release() either. setIndirectLight only ever sees a
+// live pointer, so there's no use-after-free. (Filament parses the KTX into
+// its own IndirectLight, so the small buffer simply lives for the session.)
+function PlantIBL({ intensity = 28000 }) {
+  const { engine } = useFilamentContext();
+  const buffer = useBuffer({ source: IBL_SOURCE, releaseOnUnmount: false });
+
+  useWorkletEffect(() => {
+    "worklet";
+    if (buffer == null) return;
+    engine.setIndirectLight(buffer, intensity, 3);
+  });
+
+  return null;
+}
+
+// Lights rendered once per scene. PlantIBL gives plants their soft ambient/PBR
+// reflections; the directional light is the key/sun. Both live inside a child
+// of <FilamentScene> so useFilamentContext() resolves.
 function PlantLights() {
   return (
     <>
-      <EnvironmentalLight source={IBL_SOURCE} intensity={28000} />
+      <PlantIBL intensity={28000} />
       <Light
         type="directional"
         intensity={12000}
